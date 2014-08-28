@@ -3,10 +3,21 @@
 
 typedef struct{
   //Add needed fields
+  unsigned int rows;
+  unsigned int cols;
+  double* matrix;
 } matrix_t;
 
 
 matrix_t* new_matrix(int rows, int cols){
+  matrix_t* new_matrix = (matrix_t*)malloc(sizeof(matrix_t));
+  new_matrix->rows = rows;
+  new_matrix->cols = cols;
+  new_matrix->matrix = malloc(rows*sizeof(double*));
+  for(int i=0;i<rows;i++) {
+    new_matrix->matrix[i] = malloc(cols * sizeof(double));
+  }
+  return new_matrix;
 }
 
 
