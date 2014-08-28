@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 typedef struct{
   //Add needed fields
   unsigned int rows;
   unsigned int cols;
-  double* matrix;
+  double** matrix;
 } matrix_t;
 
 
@@ -15,29 +16,40 @@ matrix_t* new_matrix(int rows, int cols){
   new_matrix->cols = cols;
   new_matrix->matrix = malloc(rows*sizeof(double*));
   for(int i=0;i<rows;i++) {
-    new_matrix->matrix[i] = malloc(cols * sizeof(double));
+    (new_matrix->matrix)[i] = malloc(cols * sizeof(double));
   }
   return new_matrix;
 }
 
 
 void print_matrix(matrix_t* matrix){
+  for(int i=0;i<matrix->rows;i++) {
+    for(int j=0;j<matrix->cols;j++) {
+      printf("%f ",matrix->matrix[i][j]);
+    }
+    printf("\n");
+  }
 }
 
 
 void set_value(matrix_t* matrix, int row, int col, float value){
+  matrix->matrix[row][col] = value;
 }
 
 
 float get_value(matrix_t* matrix, int row, int col){
+  return matrix->matrix[row][col];
 }
 
 
 int is_sparse(matrix_t matrix, float sparse_threshold){
+  return true;
 }
       
 
 int matrix_multiply(matrix_t* a, matrix_t* b, matrix_t** c){
+  *c = (new_matrix(2,2));
+  return -1;
 }
 
 
