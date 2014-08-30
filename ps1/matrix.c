@@ -41,9 +41,16 @@ float get_value(matrix_t* matrix, int row, int col){
   return matrix->matrix[row][col];
 }
 
-
 int is_sparse(matrix_t matrix, float sparse_threshold){
-  return true;
+  float nonZero = 0.0;
+  for(int i=0;i<matrix.rows;i++) {
+    for(int j=0;j<matrix.cols;j++) {
+      if(matrix.matrix[i][j] != 0.0) {
+        nonZero++;
+      }
+    }
+  }
+  return nonZero/((matrix.rows) * (matrix.cols)) > sparse_threshold;
 }
       
 
