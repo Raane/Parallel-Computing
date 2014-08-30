@@ -55,8 +55,22 @@ int is_sparse(matrix_t matrix, float sparse_threshold){
       
 
 int matrix_multiply(matrix_t* a, matrix_t* b, matrix_t** c){
-  *c = (new_matrix(2,2));
-  return -1;
+  if(a->cols == b->rows) {
+    *c = (new_matrix(a->rows, b->cols));
+    for(int celRow=0;celRow<a->rows;celRow++) {
+      for(int celCol=0;celCol<b->cols;celCol++) {
+        float celValue = 0.0;
+        for(int sumCounter=0;sumCounter<a->cols;sumCounter++) {
+          celValue += a->matrix[celRow][sumCounter] * b->matrix[sumCounter][celCol];
+        }
+        (*c)->matrix[celRow][celCol] = celValue;
+      }
+    }
+    return 1;
+  } else {
+    *c = 0;
+    return -1;
+  }
 }
 
 
