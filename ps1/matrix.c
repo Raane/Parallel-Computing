@@ -75,10 +75,24 @@ int matrix_multiply(matrix_t* a, matrix_t* b, matrix_t** c){
 
 
 void change_size(matrix_t* matrix, int new_rows, int new_cols){
+  matrix_t* changed_matrix = new_matrix(new_rows, new_cols);
+  int rows_to_copy = (matrix->rows<changed_matrix->rows)?matrix->rows:changed_matrix->rows;
+  int cols_to_copy = (matrix->cols<changed_matrix->cols)?matrix->cols:changed_matrix->cols;
+  for(int i=0;i<rows_to_copy;i++) {
+    for(int j=0;j<cols_to_copy;j++) {
+      changed_matrix->matrix[i][j] = matrix->matrix[i][j];
+    }
+  }
+  *matrix = *changed_matrix;
 }
 
 
 void free_matrix(matrix_t* matrix){
+  for(int i=0;i<matrix->rows;i++) {
+    free(matrix->matrix[i]);
+  }
+  free(matrix->matrix);
+  free(matrix);
 }
         
 
