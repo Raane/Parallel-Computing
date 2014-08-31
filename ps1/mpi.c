@@ -30,7 +30,7 @@ int main(int argc, char** argv){
     printf("Rank %d sent %d\n",rank, message);
     MPI_Recv(&in, 1, MPI_INT, rank+1, 1, MPI_COMM_WORLD, &status);
     printf("Rank %d recieved %d\n",rank, in);
-    message=rank;
+    message=rank+(size-rank);
     MPI_Send(&message, 1, MPI_INT, rank-1, 1, MPI_COMM_WORLD);
     printf("Rank %d sent %d\n",rank, message);
   }
