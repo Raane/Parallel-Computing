@@ -9,13 +9,30 @@ int main(int argc, char** argv){
   MPI_Comm_size(MPI_COMM_WORLD, &size);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   if(rank == 0){
-    for(int i = 1; i < size; i++){
-      MPI_Send(&i, 1, MPI_INT, i, 1, MPI_COMM_WORLD);
-    }
-  }
-  else{
-    MPI_Recv(&in, 1, MPI_INT, 0, 1, MPI_COMM_WORLD, &status);
+    int message=0;
+    MPI_Send(&message, 1, MPI_INT, 1, 1, MPI_COMM_WORLD);
+    printf("Rank %d sent %d\n",rank, message);
+    MPI_Recv(&in, 1, MPI_INT, 1, 1, MPI_COMM_WORLD, &status);
     printf("Rank %d recieved %d\n",rank, in);
+  }
+  else if(rank == size-1) {
+    MPI_Recv(&in, 1, MPI_INT, size-2, 1, MPI_COMM_WORLD, &status);
+    printf("Rank %d recieved %d\n",rank, in);
+    int message=rank;
+    MPI_Send(&message, 1, MPI_INT, size-2, 1, MPI_COMM_WORLD);
+    printf("Rank %d sent %d\n",rank, message);
+  } 
+  else{
+    MPI_Recv(&in, 1, MPI_INT, rank-1, 1, MPI_COMM_WORLD, &status);
+    printf("Rank %d recieved %d\n",rank, in);
+    int message=rank;
+    MPI_Send(&message, 1, MPI_INT, rank+1, 1, MPI_COMM_WORLD);
+    printf("Rank %d sent %d\n",rank, message);
+    MPI_Recv(&in, 1, MPI_INT, rank+1, 1, MPI_COMM_WORLD, &status);
+    printf("Rank %d recieved %d\n",rank, in);
+    message=rank;
+    MPI_Send(&message, 1, MPI_INT, rank-1, 1, MPI_COMM_WORLD);
+    printf("Rank %d sent %d\n",rank, message);
   }
   MPI_Finalize();
 }
