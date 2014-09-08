@@ -226,22 +226,26 @@ void write_image(){
 
 
 int main(int argc, char** argv){
-    
+
+  if(rank==0) {
     init_mpi(argc, argv);
-    
+
     load_and_allocate_images(argc, argv);
-    
+
     create_types();
-    
+
     distribute_image();
 
     grow_region();
-    
+
     gather_region();
-    
+
     MPI_Finalize();
-    
+
     write_image();
-    
-    exit(0);
+  } else {
+    printf("Rank %d started!\n", rank);
+  }
+
+  exit(0);
 }
