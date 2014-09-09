@@ -28,6 +28,7 @@ int rank,                       // MPI rank
 
 
 MPI_Comm cart_comm;             // Cartesian communicator
+MPI_Status status;              // MPI status
 
 
 // MPI datatypes, you may have to add more.
@@ -87,10 +88,18 @@ void create_types(){
 // Send image from rank 0 to all ranks, from image to local_image
 void distribute_image(){
   for(int dest=1;dest<size;dest++) {
-    for(int row=0;row<image_size[1];row++) {
-      MPI_Send(
-          (image + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]) -1, 
-          local_image_size[0] + 2, MPI_UNSIGNED_CHAR, dest, 0, MPI_COMM_WORLD);
+    if(rank==0) {
+      memcpy(
+        (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
+        (image + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]),
+        local_image_size[0]
+        );
+    } else {
+      for(int row=0;row<image_size[1];row++) {
+        MPI_Send(
+            (image + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]), 
+            local_image_size[0], MPI_UNSIGNED_CHAR, dest, 0, MPI_COMM_WORLD);
+      }
     }
   }
 }
@@ -115,6 +124,15 @@ int finished(){
 
 }
 
+// All but rank 0 will use this to receive the image
+void receive_image(){
+  for(int row=0;row<image_size[1];row++) {
+    MPI_Recv(
+        (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
+        local_image_size[0], MPI_UNSIGNED_CHAR, 0, 0, MPI_COMM_WORLD, &status);
+    printf("Received something");
+  }
+}
 
 // Check if pixel is inside local image
 int inside(pixel_t p){
@@ -223,6 +241,16 @@ void load_and_allocate_images(int argc, char** argv){
   local_region = (unsigned char*)calloc(sizeof(unsigned char),lsize_border);
 }
 
+void load_and_allocate_local_images() {
+  local_image_size[0] = image_size[0]/dims[0];
+  local_image_size[1] = image_size[1]/dims[1];
+
+  int lsize = local_image_size[0]*local_image_size[1];
+  int lsize_border = (local_image_size[0] + 2)*(local_image_size[1] + 2);
+  local_image = (unsigned char*)malloc(sizeof(unsigned char)*lsize_border);
+  local_region = (unsigned char*)calloc(sizeof(unsigned char),lsize_border);
+}
+
 
 void write_image(){
   if(rank==0){
@@ -254,6 +282,8 @@ int main(int argc, char** argv){
 
     write_image();
   } else {
+    load_and_allocate_local_images(argc, argv);
+    receive_image();
     printf("Rank %d started!\n", rank);
     MPI_Finalize();
   }
