@@ -87,13 +87,15 @@ void create_types(){
 
 // Send image from rank 0 to all ranks, from image to local_image
 void distribute_image(){
-  for(int dest=1;dest<size;dest++) {
-    if(rank==0) {
-      memcpy(
-        (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
-        (image + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]),
-        local_image_size[0]
-        );
+  for(int dest=0;dest<size;dest++) {
+    if(dest==0) {
+      for(int row=0;row<image_size[1];row++) {
+        memcpy(
+          (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
+          (image + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]),
+          local_image_size[0]
+          );
+      }
     } else {
       for(int row=0;row<image_size[1];row++) {
         MPI_Send(
