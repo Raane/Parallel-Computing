@@ -186,7 +186,12 @@ void init_mpi(int argc, char** argv){
     MPI_Dims_create(size, 2, dims);
     MPI_Cart_create( MPI_COMM_WORLD, 2, dims, periods, 0, &cart_comm );
     MPI_Cart_coords( cart_comm, rank, 2, coords );
-    
+
+    printf("dim 0: %d, ", dims[0]);
+    printf("dim 1: %d, ", dims[0]);
+    printf("coor 0: %d, ", coords[0]);
+    printf("coor 1: %d\n", coords[1]);
+  
     MPI_Cart_shift( cart_comm, 0, 1, &north, &south );
     MPI_Cart_shift( cart_comm, 1, 1, &west, &east );
 }
@@ -227,8 +232,8 @@ void write_image(){
 
 int main(int argc, char** argv){
 
+  init_mpi(argc, argv);
   if(rank==0) {
-    init_mpi(argc, argv);
 
     load_and_allocate_images(argc, argv);
 
@@ -245,6 +250,7 @@ int main(int argc, char** argv){
     write_image();
   } else {
     printf("Rank %d started!\n", rank);
+    MPI_Finalize();
   }
 
   exit(0);
