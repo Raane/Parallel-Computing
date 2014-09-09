@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <mpi.h>
 #include <math.h>
 #include "bmp.h"
@@ -132,7 +133,7 @@ void receive_image(){
     MPI_Recv(
         (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
         local_image_size[0], MPI_UNSIGNED_CHAR, 0, 0, MPI_COMM_WORLD, &status);
-    printf("Received something");
+//    printf("Received something");
   }
 }
 
