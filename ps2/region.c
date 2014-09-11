@@ -117,31 +117,49 @@ void send_image_border(int direction) {
     default: recipient = -1;
   }
   if(recipient!=-2) {
+    if(direction%2==0) {
+      int row = direction==0?0:local_image_size[1];
+      printf("Rank %d sending to rank %d\n", rank, recipient);
+      MPI_Send(
+          (local_image + row * (local_image_size[0] + 2) + 1), 
+          local_image_size[0], MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
+    } else {
+      
+    }
   }
 }
 
 void receive_image_border(int direction) {
-  int recipient;
+  int sender;
   switch(direction) {
-    case 0: recipient = north; break;
-    case 1: recipient = east; break;
-    case 2: recipient = south; break;
-    case 3: recipient = west; break;
-    default: recipient = -1;
+    case 0: sender = north; break;
+    case 1: sender = east; break;
+    case 2: sender = south; break;
+    case 3: sender = west; break;
+    default: sender = -1;
   }
-  if(recipient!=-2) {
+  if(sender!=-2) {
+    if(direction%2==0) {
+      int row = direction==0?0:local_image_size[1];
+      printf("Rank %d receiving from rank %d\n", rank, sender);
+      MPI_Recv(
+          (local_image + row * (local_image_size[0] + 2) + 1), 
+          local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+    } else {
+      
+    }
   }
 }
 
 
 void distribute_image_border(){
   for(int direction=0;direction<4;direction++) {
-    if(rank%2==0) {
+    if((rank+(rank/dims[0]))%2==0) {
       send_image_border(direction);
-      receive_image_border(direction);
+      //receive_image_border(direction);
     } else {
       receive_image_border((direction+2)%4);
-      send_image_border((direction+2)%4);
+      //send_image_border((direction+2)%4);
     }
   }
 }
@@ -250,10 +268,10 @@ void init_mpi(int argc, char** argv){
   MPI_Cart_create( MPI_COMM_WORLD, 2, dims, periods, 0, &cart_comm );
   MPI_Cart_coords( cart_comm, rank, 2, coords );
 
-  printf("dim 0: %d, ", dims[0]);
+ /* printf("dim 0: %d, ", dims[0]);
   printf("dim 1: %d, ", dims[0]);
   printf("coor 0: %d, ", coords[0]);
-  printf("coor 1: %d\n", coords[1]);
+  printf("coor 1: %d\n", coords[1]);*/
 
   MPI_Cart_shift( cart_comm, 0, 1, &north, &south );
   MPI_Cart_shift( cart_comm, 1, 1, &west, &east );
@@ -327,10 +345,9 @@ int main(int argc, char** argv){
     load_and_allocate_local_images(argc, argv);
     receive_image();
     distribute_image_border();
-    printf("Rank %d started!\n", rank);
     MPI_Finalize();
   }
-    printf("rank(%d): n,e,s,w: %d %d %d %d\n", rank, north, east, south, west);
+    //printf("rank(%d): n,e,s,w: %d %d %d %d\n", rank, north, east, south, west);
 
   exit(0);
 }
