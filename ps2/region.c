@@ -107,6 +107,44 @@ void distribute_image(){
   }
 }
 
+void send_image_border(int direction) {
+  int recipient;
+  switch(direction) {
+    case 0: recipient = north; break;
+    case 1: recipient = east; break;
+    case 2: recipient = south; break;
+    case 3: recipient = west; break;
+    default: recipient = -1;
+  }
+  if(recipient!=-2) {
+  }
+}
+
+void receive_image_border(int direction) {
+  int recipient;
+  switch(direction) {
+    case 0: recipient = north; break;
+    case 1: recipient = east; break;
+    case 2: recipient = south; break;
+    case 3: recipient = west; break;
+    default: recipient = -1;
+  }
+  if(recipient!=-2) {
+  }
+}
+
+
+void distribute_image_border(){
+  for(int direction=0;direction<4;direction++) {
+    if(rank%2==0) {
+      send_image_border(direction);
+      receive_image_border(direction);
+    } else {
+      receive_image_border((direction+2)%4);
+      send_image_border((direction+2)%4);
+    }
+  }
+}
 
 // Exchange borders with neighbour ranks
 void exchange(stack_t* stack){
@@ -133,7 +171,6 @@ void receive_image(){
     MPI_Recv(
         (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
         local_image_size[0], MPI_UNSIGNED_CHAR, 0, 0, MPI_COMM_WORLD, &status);
-//    printf("Received something");
   }
 }
 
@@ -277,6 +314,8 @@ int main(int argc, char** argv){
 
     distribute_image();
 
+    distribute_image_border();
+
     grow_region();
 
     gather_region();
@@ -287,10 +326,11 @@ int main(int argc, char** argv){
   } else {
     load_and_allocate_local_images(argc, argv);
     receive_image();
+    distribute_image_border();
     printf("Rank %d started!\n", rank);
     MPI_Finalize();
   }
-  //  printf("rank(%d): n,s,e,w: %d %d %d %d\n", rank, north, south, east, west);
+    printf("rank(%d): n,e,s,w: %d %d %d %d\n", rank, north, east, south, west);
 
   exit(0);
 }
