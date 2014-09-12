@@ -179,10 +179,80 @@ void distribute_image_border(){
   }
 }
 
+void send_region_border(int direction) {
+  int recipient;
+  switch(direction) {
+    case 0: recipient = north; break;
+    case 1: recipient = east; break;
+    case 2: recipient = south; break;
+    case 3: recipient = west; break;
+    default: recipient = -1;
+  }
+  if(recipient!=-2) {
+    printf("Rank %d sending to rank %d\n", rank, recipient);
+    if(direction%2==0) {
+      int row = direction==0?0:local_image_size[1];
+      MPI_Send(
+          (local_region + row * (local_image_size[0] + 2) + 1), 
+          local_image_size[0], MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
+    } else {
+      for(int row=1;row<local_image_size[1]-1;row++) {
+        MPI_Send(
+            (local_region + row * (local_image_size[0] + 2)), 
+            1, MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
+        MPI_Send(
+            (local_region + row * (local_image_size[0] + 2) + local_image_size[0]+2), 
+            1, MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
+      }
+    }
+  }
+}
+
+void receive_region_border(int direction) {
+  int sender;
+  switch(direction) {
+    case 0: sender = north; break;
+    case 1: sender = east; break;
+    case 2: sender = south; break;
+    case 3: sender = west; break;
+    default: sender = -1;
+  }
+  if(sender!=-2) {
+    printf("Rank %d receiving from rank %d\n", rank, sender);
+    if(direction%2==0) {
+      int row = direction==0?0:local_image_size[1];
+      unsigned char* received_border = malloc(local_image_size[0] * sizeof(unsigned char));
+      MPI_Recv((received_border), local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+      for(int i=0;i<local_image_size[0];i++) {
+        if(received_border[i] == 1)  {
+          
+        }
+      }
+    } else {
+      for(int row=1;row<local_image_size[1]-1;row++) {
+        MPI_Recv(
+            (local_region + row * (local_image_size[0] + 2)), 
+            1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(
+            (local_region + row * (local_image_size[0] + 2) + local_image_size[0]+2), 
+            1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+      }
+      
+    }
+  }
+}
+
 // Exchange borders with neighbour ranks
 void exchange(stack_t* stack){
-
-
+  for(int direction=0;direction<4;direction++) {
+    if((rank+(rank/dims[0]))%2==0) {
+      send_image_border(direction);
+      receive_image_border(direction);
+    } else {
+      receive_image_border((direction+2)%4);
+      send_image_border((direction+2)%4);
+    }
+  }
 }
 
 
