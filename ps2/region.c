@@ -117,14 +117,21 @@ void send_image_border(int direction) {
     default: recipient = -1;
   }
   if(recipient!=-2) {
+    printf("Rank %d sending to rank %d\n", rank, recipient);
     if(direction%2==0) {
       int row = direction==0?0:local_image_size[1];
-      printf("Rank %d sending to rank %d\n", rank, recipient);
       MPI_Send(
           (local_image + row * (local_image_size[0] + 2) + 1), 
           local_image_size[0], MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
     } else {
-      
+      for(int row=1;row<local_image_size[1]-1;row++) {
+        MPI_Send(
+            (local_image + row * (local_image_size[0] + 2)), 
+            1, MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
+        MPI_Send(
+            (local_image + row * (local_image_size[0] + 2) + local_image_size[0]+2), 
+            1, MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
+      }
     }
   }
 }
@@ -139,13 +146,21 @@ void receive_image_border(int direction) {
     default: sender = -1;
   }
   if(sender!=-2) {
+    printf("Rank %d receiving from rank %d\n", rank, sender);
     if(direction%2==0) {
       int row = direction==0?0:local_image_size[1];
-      printf("Rank %d receiving from rank %d\n", rank, sender);
       MPI_Recv(
           (local_image + row * (local_image_size[0] + 2) + 1), 
           local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
     } else {
+      for(int row=1;row<local_image_size[1]-1;row++) {
+        MPI_Recv(
+            (local_image + row * (local_image_size[0] + 2)), 
+            1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(
+            (local_image + row * (local_image_size[0] + 2) + local_image_size[0]+2), 
+            1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+      }
       
     }
   }
@@ -156,10 +171,10 @@ void distribute_image_border(){
   for(int direction=0;direction<4;direction++) {
     if((rank+(rank/dims[0]))%2==0) {
       send_image_border(direction);
-      //receive_image_border(direction);
+      receive_image_border(direction);
     } else {
       receive_image_border((direction+2)%4);
-      //send_image_border((direction+2)%4);
+      send_image_border((direction+2)%4);
     }
   }
 }
