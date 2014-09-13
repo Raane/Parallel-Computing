@@ -411,16 +411,6 @@ void load_and_allocate_images(int argc, char** argv){
   local_region = (unsigned char*)calloc(sizeof(unsigned char),lsize_border);
 }
 
-void load_and_allocate_local_images() {
-  local_image_size[0] = image_size[0]/dims[0];
-  local_image_size[1] = image_size[1]/dims[1];
-
-  int lsize = local_image_size[0]*local_image_size[1];
-  int lsize_border = (local_image_size[0] + 2)*(local_image_size[1] + 2);
-  local_image = (unsigned char*)malloc(sizeof(unsigned char)*lsize_border);
-  local_region = (unsigned char*)calloc(sizeof(unsigned char),lsize_border);
-}
-
 
 void write_image(){
   if(rank==0){
@@ -436,37 +426,26 @@ void write_image(){
 int main(int argc, char** argv){
 
   init_mpi(argc, argv);
+  load_and_allocate_images(argc, argv);
+  create_types();
   if(rank==0) {
-
-    load_and_allocate_images(argc, argv);
-
-    create_types();
-
-    printf("Starting dirtribute image\n");
-
     distribute_image();
-    
-    printf("Starting dirtribute image border\n");
-
     distribute_image_border();
-
-    printf("Starting growing region\n");
-
-    grow_region();
-
-    printf("Starting gather\n");
-
-    gather_region();
-
-    printf("Finalize\n");
-
-    MPI_Finalize();
-
-    write_image();
   } else {
-    load_and_allocate_local_images(argc, argv);
     receive_image();
     distribute_image_border();
+  }
+
+  //grow_region();
+  //exchange();
+
+
+  if(rank==0) {
+    gather_region();
+    MPI_Finalize();
+    write_image();
+  } else {
+    gather_region();
     MPI_Finalize();
   }
     //printf("rank(%d): n,e,s,w: %d %d %d %d\n", rank, north, east, south, west);
