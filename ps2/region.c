@@ -73,8 +73,8 @@ pixel_t pop(stack_t* stack){
 // Check if two pixels are similar. The hardcoded threshold can be changed.
 // More advanced similarity checks could have been used.
 int similar(unsigned char* im, pixel_t p, pixel_t q){
-  int a = im[p.x +  p.y * image_size[1]];
-  int b = im[q.x +  q.y * image_size[1]];
+  int a = im[p.x +  p.y * (local_image_size[1]+2)];
+  int b = im[q.x +  q.y * (local_image_size[1]+2)];
   int diff = abs(a-b);
   return diff < 2;
 }
@@ -82,15 +82,20 @@ int similar(unsigned char* im, pixel_t p, pixel_t q){
 
 // Create and commit MPI datatypes
 void create_types(){
-
+  /* 
+   * I never got this working, but I really should have a type for sending the whole local
+   * image as a single send, and vertical region borders as a single send.
+   */
 }
 
 
 // Send image from rank 0 to all ranks, from image to local_image
+// This does not send the border of the images, as these can be distributed paralell between the neighbours.
 void distribute_image(){
-  for(int dest=0;dest<size;dest++) {
+  for(int dest=0;dest<size;dest++) { // Rank 0 will send the image to each of the other processes.
     if(dest==0) {
       for(int row=0;row<image_size[1];row++) {
+        // Rank 0 itself do not need to send the data, and can simply copy them from memory.
         memcpy(
           (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
           (image + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]),
@@ -99,6 +104,7 @@ void distribute_image(){
       }
     } else {
       for(int row=0;row<image_size[1];row++) {
+        // Send each row of the local image as a MPI_Sends, this can be done more efficiently with a cutsom MPI type, but I never got it working.
         MPI_Send(
             (image + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]), 
             local_image_size[0], MPI_UNSIGNED_CHAR, dest, 0, MPI_COMM_WORLD);
@@ -107,6 +113,18 @@ void distribute_image(){
   }
 }
 
+// All but rank 0 will use this to receive the local image
+void receive_image(){
+  for(int row=0;row<image_size[1];row++) {
+    MPI_Recv(
+        (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
+        local_image_size[0], MPI_UNSIGNED_CHAR, 0, 0, MPI_COMM_WORLD, &status);
+  }
+}
+
+
+
+// Sends the border of the local image to one of the 4 neighbours of this node.
 void send_image_border(int direction) {
   int recipient;
   switch(direction) {
@@ -117,13 +135,14 @@ void send_image_border(int direction) {
     default: recipient = -1;
   }
   if(recipient!=-2) {
-    //printf("Rank %d sending to rank %d\n", rank, recipient);
     if(direction%2==0) {
+      // Horizontal borders
       int row = direction==0?0:local_image_size[1];
       MPI_Send(
           (local_image + row * (local_image_size[0] + 2) + 1), 
           local_image_size[0], MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
     } else {
+      // Vertical borders
       for(int row=1;row<local_image_size[1]-1;row++) {
         MPI_Send(
             (local_image + row * (local_image_size[0] + 2)), 
@@ -136,6 +155,7 @@ void send_image_border(int direction) {
   }
 }
 
+// Receive the border of the local image from one of the 4 neightbours of this node.
 void receive_image_border(int direction) {
   int sender;
   switch(direction) {
@@ -146,13 +166,14 @@ void receive_image_border(int direction) {
     default: sender = -1;
   }
   if(sender!=-2) {
-    //printf("Rank %d receiving from rank %d\n", rank, sender);
     if(direction%2==0) {
+      // Horizontal borders.
       int row = direction==0?0:local_image_size[1];
       MPI_Recv(
           (local_image + row * (local_image_size[0] + 2) + 1), 
           local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
     } else {
+      // Vertical borders
       for(int row=1;row<local_image_size[1]-1;row++) {
         MPI_Recv(
             (local_image + row * (local_image_size[0] + 2)), 
@@ -166,7 +187,8 @@ void receive_image_border(int direction) {
   }
 }
 
-
+// Distribute the local image border to each neighbour of this node.
+// This is done by dividing the mesh of nodes in a checkerboard pattern and let half send and half receive at any time.
 void distribute_image_border(){
   for(int direction=0;direction<4;direction++) {
     if((rank+(rank/dims[0]))%2==0) {
@@ -179,6 +201,7 @@ void distribute_image_border(){
   }
 }
 
+// Send the border of the local region to a neighbour
 void send_region_border(int direction, stack_t* stack) {
   int recipient;
   switch(direction) {
@@ -190,21 +213,24 @@ void send_region_border(int direction, stack_t* stack) {
   }
   if(recipient!=-2) {
     if(direction%2==0) {
+      // Horizontal borders.
       int row = direction==0?0:local_image_size[1];
       MPI_Send(
-          (local_region + row * (local_image_size[0] + 2) + 1), 
+          (&local_region + row * (local_image_size[0] + 2) + 1), 
           local_image_size[0], MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
     } else {
+      // Vertical borders.
       int col = direction==3?0:local_image_size[0]+2;
       for(int row=1;row<local_image_size[1]-1;row++) {
         MPI_Send(
-            (local_region + row * (local_image_size[0] + 2) + col), 
+            (&local_region + row * (local_image_size[0] + 2) + col), 
             1, MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
       }
     }
   }
 }
 
+// Receive the border of the local region from a neighbour
 void receive_region_border(int direction, stack_t* stack) {
   int sender;
   switch(direction) {
@@ -216,28 +242,34 @@ void receive_region_border(int direction, stack_t* stack) {
   }
   if(sender!=-2) {
     if(direction%2==0) {
+      // Horizontal borders.
       int row = direction==0?0:local_image_size[1];
       unsigned char* received_border = malloc(local_image_size[0] * sizeof(unsigned char));
       MPI_Recv(received_border, local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
       for(int i=0;i<local_image_size[0];i++) {
         if(received_border[i] == 1) {
-          pixel_t pixel;
-          pixel.x = i + 1;
-          pixel.y = row;;
-          push(stack, pixel);
+          if(local_region[i + 1 + row * (local_image_size[0]+2)] != 1) {
+            pixel_t pixel;
+            pixel.x = i + 1;
+            pixel.y = row;;
+            push(stack, pixel);
+          }
         }
       }
       free(received_border);
     } else {
+      // Vertical borders.
       for(int row=1;row<local_image_size[1]-1;row++) {
         int col = direction==3?0:local_image_size[0]+2;
         unsigned char* received_border = malloc(sizeof(unsigned char));
         MPI_Recv(received_border, 1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
         if(received_border[0] == 1) {
-          pixel_t pixel;
-          pixel.x = col;
-          pixel.y = row;;
-          push(stack, pixel);
+          if(local_region[col + row * (local_image_size[0]+2)] != 1) {
+            pixel_t pixel;
+            pixel.x = col;
+            pixel.y = row;;
+            push(stack, pixel);
+          }
         }
         free(received_border);
       }
@@ -246,6 +278,7 @@ void receive_region_border(int direction, stack_t* stack) {
 }
 
 // Exchange borders with neighbour ranks
+// This is done by dividing the mesh of nodes in a checkerboard pattern and let half send and half receive at any time.
 void exchange(stack_t* stack){
   for(int direction=0;direction<4;direction++) {
     if((rank+(rank/dims[0]))%2==0) {
@@ -256,6 +289,12 @@ void exchange(stack_t* stack){
       send_region_border((direction+2)%4, stack);
     }
   }
+}
+
+void clear_local_region() {
+  int lsize = local_image_size[0]*local_image_size[1];
+  int lsize_border = (local_image_size[0] + 2)*(local_image_size[1] + 2);
+  local_region = (unsigned char*)calloc(sizeof(unsigned char),lsize_border);
 }
 
 
@@ -295,16 +334,6 @@ int finished(stack_t* stack){
   return global_sum == 0;
 }
 
-// All but rank 0 will use this to receive the image
-void receive_image(){
-  for(int row=0;row<image_size[1];row++) {
-    MPI_Recv(
-        (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
-        local_image_size[0], MPI_UNSIGNED_CHAR, 0, 0, MPI_COMM_WORLD, &status);
-  }
-}
-
-
 
 // Check if pixel is inside local image
 int inside(pixel_t p){
@@ -326,8 +355,8 @@ void add_seeds(stack_t* stack){
 
   for(int i = 0; i < 4; i++){
     pixel_t seed;
-    seed.x = seeds[i*2] - coords[1]*local_image_size[1];
-    seed.y = seeds[i*2+1] - coords[0]*local_image_size[0];
+    seed.x = seeds[i*2] - coords[1]*(local_image_size[1]+2);
+    seed.y = seeds[i*2+1] - coords[0]*(local_image_size[0]+2);
 
     if(inside(seed)){
       push(stack, seed);
@@ -336,7 +365,7 @@ void add_seeds(stack_t* stack){
 }
 
 
-// Region growing, serial implementation
+// Region growing, paralell implementation.
 void grow_region(stack_t* stack) {
 
   add_seeds(stack);
@@ -362,7 +391,7 @@ void grow_region(stack_t* stack) {
       }
 
       if(similar(local_image, pixel, candidate)){
-        region[candidate.x + candidate.y * (local_image_size[1] + 2)] = 1;
+        local_region[candidate.x + candidate.y * (local_image_size[1] + 2)] = 1;
         push(stack,candidate);
       }
     }
@@ -406,11 +435,9 @@ void load_and_allocate_images(int argc, char** argv){
   local_region = (unsigned char*)calloc(sizeof(unsigned char),lsize_border);
 }
 
-
 void write_image(){
   if(rank==0){
     for(int i = 0; i < image_size[0]*image_size[1]; i++){
-
       image[i] *= (region[i] == 0);
     }
     write_bmp(image, image_size[0], image_size[1]);
@@ -424,7 +451,6 @@ int main(int argc, char** argv){
   init_mpi(argc, argv);
   stack_t* stack = new_stack();
   load_and_allocate_images(argc, argv);
-  create_types();
   if(rank==0) {
     distribute_image();
     distribute_image_border();
@@ -432,6 +458,8 @@ int main(int argc, char** argv){
     receive_image();
     distribute_image_border();
   }
+
+  clear_local_region();
 
   // Doing the actual parallel image processing.
   do{
