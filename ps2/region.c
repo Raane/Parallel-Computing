@@ -287,11 +287,11 @@ void gather_region(){
   }
 }
 
-// Determine if all ranks are finished. You may have to add arguments.
-// You dont have to have this check as a seperate function
+// Determine if all ranks are finished.
+// This is done by summing the stacksize across all nodes using reduce all.
 int finished(stack_t* stack){
-  float global_sum;
-  MPI_Allreduce(&(stack->size), &global_sum, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+  int global_sum;
+  MPI_Allreduce(&(stack->size), &global_sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
   return global_sum == 0;
 }
 
@@ -344,8 +344,7 @@ void grow_region(stack_t* stack) {
   while(stack->size > 0){
     pixel_t pixel = pop(stack);
 
-    region[pixel.y * image_size[1] + pixel.x] = 1;
-
+    local_region[pixel.y * (local_image_size[1]+2) + pixel.x] = 1;
 
     int dx[4] = {0,0,1,-1}, dy[4] = {1,-1,0,0};
     for(int c = 0; c < 4; c++){
@@ -358,12 +357,12 @@ void grow_region(stack_t* stack) {
       }
 
 
-      if(region[candidate.y * image_size[1] + candidate.x]){
+      if(local_region[candidate.y * (local_image_size[1]+2) + candidate.x]){
         continue;
       }
 
-      if(similar(image, pixel, candidate)){
-        region[candidate.x + candidate.y * image_size[1]] = 1;
+      if(similar(local_image, pixel, candidate)){
+        region[candidate.x + candidate.y * (local_image_size[1] + 2)] = 1;
         push(stack,candidate);
       }
     }
@@ -421,6 +420,7 @@ void write_image(){
 
 int main(int argc, char** argv){
 
+  // Initializing everything and distributing data.
   init_mpi(argc, argv);
   stack_t* stack = new_stack();
   load_and_allocate_images(argc, argv);
@@ -433,12 +433,13 @@ int main(int argc, char** argv){
     distribute_image_border();
   }
 
-  //grow_region(stack);
+  // Doing the actual parallel image processing.
   do{
+    grow_region(stack);
     exchange(stack);
   } while(!finished(stack));
 
-
+  // Gathering data, writing to file and finalizing.
   if(rank==0) {
     gather_region();
     MPI_Finalize();
@@ -447,7 +448,6 @@ int main(int argc, char** argv){
     gather_region();
     MPI_Finalize();
   }
-    //printf("rank(%d): n,e,s,w: %d %d %d %d\n", rank, north, east, south, west);
 
   exit(0);
 }
