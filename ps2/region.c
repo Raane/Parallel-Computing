@@ -289,8 +289,10 @@ void gather_region(){
 
 // Determine if all ranks are finished. You may have to add arguments.
 // You dont have to have this check as a seperate function
-int finished(){
-
+int finished(stack_t* stack){
+  float global_sum;
+  MPI_Allreduce(&(stack->size), &global_sum, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+  return global_sum == 0;
 }
 
 // All but rank 0 will use this to receive the image
@@ -432,7 +434,9 @@ int main(int argc, char** argv){
   }
 
   //grow_region(stack);
-  exchange(stack);
+  do{
+    exchange(stack);
+  } while(!finished(stack));
 
 
   if(rank==0) {
