@@ -179,7 +179,7 @@ void distribute_image_border(){
   }
 }
 
-void send_region_border(int direction) {
+void send_region_border(int direction, stack_t* stack) {
   int recipient;
   switch(direction) {
     case 0: recipient = north; break;
@@ -196,19 +196,17 @@ void send_region_border(int direction) {
           (local_region + row * (local_image_size[0] + 2) + 1), 
           local_image_size[0], MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
     } else {
+      int col = direction==3?0:local_image_size[0]+2;
       for(int row=1;row<local_image_size[1]-1;row++) {
         MPI_Send(
-            (local_region + row * (local_image_size[0] + 2)), 
-            1, MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
-        MPI_Send(
-            (local_region + row * (local_image_size[0] + 2) + local_image_size[0]+2), 
+            (local_region + row * (local_image_size[0] + 2) + col), 
             1, MPI_UNSIGNED_CHAR, recipient, 0, MPI_COMM_WORLD);
       }
     }
   }
 }
 
-void receive_region_border(int direction) {
+void receive_region_border(int direction, stack_t* stack) {
   int sender;
   switch(direction) {
     case 0: sender = north; break;
@@ -222,22 +220,29 @@ void receive_region_border(int direction) {
     if(direction%2==0) {
       int row = direction==0?0:local_image_size[1];
       unsigned char* received_border = malloc(local_image_size[0] * sizeof(unsigned char));
-      MPI_Recv((received_border), local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+      MPI_Recv(&received_border, local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
       for(int i=0;i<local_image_size[0];i++) {
-        if(received_border[i] == 1)  {
-          
+        if(received_border[i] == 1) {
+          pixel_t pixel;
+          pixel.x = i + 1;
+          pixel.y = row;;
+          push(stack, pixel);
         }
       }
+      free(received_border);
     } else {
       for(int row=1;row<local_image_size[1]-1;row++) {
-        MPI_Recv(
-            (local_region + row * (local_image_size[0] + 2)), 
-            1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
-        MPI_Recv(
-            (local_region + row * (local_image_size[0] + 2) + local_image_size[0]+2), 
-            1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+        int col = direction==3?0:local_image_size[0]+2;
+        unsigned char* received_border = malloc(sizeof(unsigned char));
+        MPI_Recv(&received_border, 1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+        if(received_border[0] == 1) {
+          pixel_t pixel;
+          pixel.x = col;
+          pixel.y = row;;
+          push(stack, pixel);
+        }
+        free(received_border);
       }
-      
     }
   }
 }
@@ -246,11 +251,11 @@ void receive_region_border(int direction) {
 void exchange(stack_t* stack){
   for(int direction=0;direction<4;direction++) {
     if((rank+(rank/dims[0]))%2==0) {
-      send_image_border(direction);
-      receive_image_border(direction);
+      send_region_border(direction, stack);
+      receive_region_border(direction, stack);
     } else {
-      receive_image_border((direction+2)%4);
-      send_image_border((direction+2)%4);
+      receive_region_border((direction+2)%4, stack);
+      send_region_border((direction+2)%4, stack);
     }
   }
 }
@@ -258,8 +263,30 @@ void exchange(stack_t* stack){
 
 // Gather region bitmap from all ranks to rank 0, from local_region to region
 void gather_region(){
-
-
+  if(rank==0) {
+    for(int sender=1;sender<size;sender++) {
+      for(int row=1;row<local_image_size[1]+1;row++) {
+        int sender_x = sender%dims[0];
+        int sender_y = sender/dims[0];
+        MPI_Recv(
+            (region + (sender_y * local_image_size[1] + row) * image_size[0] + sender_x * local_image_size[0]),
+            local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+      }
+    }
+    for(int row=0;row<local_image_size[1];row++) {
+      memcpy(
+          (region + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]),
+          (local_region + (local_image_size[0] + 2) * ( row + 1 ) + 1),
+          local_image_size[0]
+          );
+    }
+  } else {
+    for(int row=1;row<local_image_size[1]+1;row++) {
+      MPI_Send(
+          (local_region + row * (local_image_size[0] + 2) + 1), 
+          local_image_size[0], MPI_UNSIGNED_CHAR, 0, 0, MPI_COMM_WORLD);
+    }
+  }
 }
 
 // Determine if all ranks are finished. You may have to add arguments.
@@ -276,6 +303,8 @@ void receive_image(){
         local_image_size[0], MPI_UNSIGNED_CHAR, 0, 0, MPI_COMM_WORLD, &status);
   }
 }
+
+
 
 // Check if pixel is inside local image
 int inside(pixel_t p){
@@ -298,7 +327,7 @@ void add_seeds(stack_t* stack){
   for(int i = 0; i < 4; i++){
     pixel_t seed;
     seed.x = seeds[i*2] - coords[1]*local_image_size[1];
-    seed.y = seeds[i*2+1] -coords[0]*local_image_size[0];
+    seed.y = seeds[i*2+1] - coords[0]*local_image_size[0];
 
     if(inside(seed)){
       push(stack, seed);
