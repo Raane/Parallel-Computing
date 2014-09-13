@@ -117,7 +117,7 @@ void send_image_border(int direction) {
     default: recipient = -1;
   }
   if(recipient!=-2) {
-    printf("Rank %d sending to rank %d\n", rank, recipient);
+    //printf("Rank %d sending to rank %d\n", rank, recipient);
     if(direction%2==0) {
       int row = direction==0?0:local_image_size[1];
       MPI_Send(
@@ -146,7 +146,7 @@ void receive_image_border(int direction) {
     default: sender = -1;
   }
   if(sender!=-2) {
-    printf("Rank %d receiving from rank %d\n", rank, sender);
+    //printf("Rank %d receiving from rank %d\n", rank, sender);
     if(direction%2==0) {
       int row = direction==0?0:local_image_size[1];
       MPI_Recv(
@@ -189,7 +189,6 @@ void send_region_border(int direction, stack_t* stack) {
     default: recipient = -1;
   }
   if(recipient!=-2) {
-    printf("Rank %d sending to rank %d\n", rank, recipient);
     if(direction%2==0) {
       int row = direction==0?0:local_image_size[1];
       MPI_Send(
@@ -216,7 +215,6 @@ void receive_region_border(int direction, stack_t* stack) {
     default: sender = -1;
   }
   if(sender!=-2) {
-    printf("Rank %d receiving from rank %d\n", rank, sender);
     if(direction%2==0) {
       int row = direction==0?0:local_image_size[1];
       unsigned char* received_border = malloc(local_image_size[0] * sizeof(unsigned char));
@@ -444,13 +442,23 @@ int main(int argc, char** argv){
 
     create_types();
 
+    printf("Starting dirtribute image\n");
+
     distribute_image();
+    
+    printf("Starting dirtribute image border\n");
 
     distribute_image_border();
 
+    printf("Starting growing region\n");
+
     grow_region();
 
+    printf("Starting gather\n");
+
     gather_region();
+
+    printf("Finalize\n");
 
     MPI_Finalize();
 
