@@ -218,7 +218,7 @@ void receive_region_border(int direction, stack_t* stack) {
     if(direction%2==0) {
       int row = direction==0?0:local_image_size[1];
       unsigned char* received_border = malloc(local_image_size[0] * sizeof(unsigned char));
-      MPI_Recv(&received_border, local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+      MPI_Recv(received_border, local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
       for(int i=0;i<local_image_size[0];i++) {
         if(received_border[i] == 1) {
           pixel_t pixel;
@@ -232,7 +232,7 @@ void receive_region_border(int direction, stack_t* stack) {
       for(int row=1;row<local_image_size[1]-1;row++) {
         int col = direction==3?0:local_image_size[0]+2;
         unsigned char* received_border = malloc(sizeof(unsigned char));
-        MPI_Recv(&received_border, 1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(received_border, 1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
         if(received_border[0] == 1) {
           pixel_t pixel;
           pixel.x = col;
@@ -335,9 +335,8 @@ void add_seeds(stack_t* stack){
 
 
 // Region growing, serial implementation
-void grow_region(){
+void grow_region(stack_t* stack) {
 
-  stack_t* stack = new_stack();
   add_seeds(stack);
 
   while(stack->size > 0){
@@ -380,11 +379,6 @@ void init_mpi(int argc, char** argv){
   MPI_Cart_create( MPI_COMM_WORLD, 2, dims, periods, 0, &cart_comm );
   MPI_Cart_coords( cart_comm, rank, 2, coords );
 
- /* printf("dim 0: %d, ", dims[0]);
-  printf("dim 1: %d, ", dims[0]);
-  printf("coor 0: %d, ", coords[0]);
-  printf("coor 1: %d\n", coords[1]);*/
-
   MPI_Cart_shift( cart_comm, 0, 1, &north, &south );
   MPI_Cart_shift( cart_comm, 1, 1, &west, &east );
 }
@@ -426,6 +420,7 @@ void write_image(){
 int main(int argc, char** argv){
 
   init_mpi(argc, argv);
+  stack_t* stack = new_stack();
   load_and_allocate_images(argc, argv);
   create_types();
   if(rank==0) {
@@ -436,8 +431,8 @@ int main(int argc, char** argv){
     distribute_image_border();
   }
 
-  //grow_region();
-  //exchange();
+  //grow_region(stack);
+  exchange(stack);
 
 
   if(rank==0) {
