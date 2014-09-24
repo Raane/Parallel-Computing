@@ -266,13 +266,78 @@ s_matrix_t* convert_to_s_matrix(csr_matrix_t* csr){
   return matrix;
 }
 
-void multiply(csr_matrix_t* m, float* v, float* r){
-  for(int i = 109; i < m->n_row_ptr-1; i++){
-
+void multiply(s_matrix_t* m, float* v, float* r, int dim, int a, int b, int c, int d, int e){
+  for(int i = 0; i < m->n_row_ptr-1; i++){
     for(int j = m->row_ptr[i]; j < m->row_ptr[i+1]; j++){
       r[i] += v[m->col_ind[j]] * m->values[j];
     }
   }
+
+  int ah = a/2;
+
+  int limits[10];
+  limits[5] = ah;
+  limits[6] = ah + b;
+  limits[7] = ah + b + c;
+  limits[8] = ah + b + c + d;
+  limits[9] = ah + b + c + d + e;
+  limits[0] = -limits[9];
+  limits[1] = -limits[8];
+  limits[2] = -limits[7];
+  limits[3] = -limits[6];
+  limits[4] = -limits[5];
+
+  limits[5]++;
+  limits[6]++;
+  limits[7]++;
+  limits[8]++;
+  limits[9]++;
+
+  int index = 0;
+  int index2 = 0;
+  int index3 = 0;
+  int index4 = 0;
+  //matrix->row_ptr[0] = 0;
+  for(int i = 0; i < dim; i++){
+
+    int row_width = index;
+    for(int j = fmax(0, limits[0]); j < fmax(0, limits[1]); j++) {
+      r[i] += v[i] * m->matrix[index4];
+      index4++;
+    }
+
+    for(int j = fmax(0, limits[2]); j < fmax(0, limits[3]); j++){
+      r[i] += v[i] * m->matrix[index4];
+      index4++;
+    }
+
+    for(int j = fmax(0,limits[4]); j < fmin(limits[5], dim); j++){
+      r[i] += v[i] * m->matrix[index4];
+      index4++;
+    }
+
+    for(int j = fmin(dim, limits[6]); j < fmin(dim, limits[7]); j++){
+      r[i] += v[i] * m->matrix[index4];
+      index4++;
+    }
+
+    for(int j = fmin(dim, limits[8]); j < fmin(dim, limits[9]); j++){
+      r[i] += v[i] * m->matrix[index4];
+      index4++;
+    }
+
+    row_width = index - row_width;
+    //matrix->row_ptr[index2+1] = matrix->row_ptr[index2] + row_width;
+    index2++;
+
+    /*for(int j = 0; j < row_width; j++)
+      matrix->values[index3++] = (float)rand()/RAND_MAX;
+
+*/
+    for(int j = 0; j < 10; j++)
+      limits[j]++;
+  }
+
 }
 
 
