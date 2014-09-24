@@ -13,7 +13,16 @@ typedef struct{
     float* values;
 } csr_matrix_t;
 
+// To save pointer accesses the whole matrix is stored in an array exploting the known structure of the
+// matrix to stop the format from wasting space.
 typedef struct{
+  int size;
+  int* matrix;
+  int a;
+  int b;
+  int c;
+  int d;
+  int e;
 } s_matrix_t;
 
 int diag_count(int dim, int n){
@@ -178,6 +187,74 @@ void compare(float* a, float* b, int n){
 
 
 s_matrix_t* create_s_matrix(int dim, int a, int b, int c, int d, int e){
+    csr_matrix_t* matrix = (csr_matrix_t*)malloc(sizeof(csr_matrix_t));
+
+    matrix->row_ptr = (int*)malloc(sizeof(int) * (n_rows+1));
+    matrix->n_row_ptr = n_rows+1;
+
+    int ah = a/2;
+    int size = diag_count(n_rows,ah);
+    size += (diag_count(n_rows,ah+b+c) - diag_count(n_rows,ah+b));
+    size += (diag_count(n_rows,ah+b+c+d+e) - diag_count(n_rows,ah+b+c+d));
+    size = size*2 + n_rows;
+
+    matrix->col_ind = (int*)malloc(sizeof(int)*size);
+    matrix->values = (float*)malloc(sizeof(float)*size);
+    matrix->n_values = size;
+
+    int limits[10];
+    limits[5] = ah;
+    limits[6] = ah + b;
+    limits[7] = ah + b + c;
+    limits[8] = ah + b + c + d;
+    limits[9] = ah + b + c + d + e;
+    limits[0] = -limits[9];
+    limits[1] = -limits[8];
+    limits[2] = -limits[7];
+    limits[3] = -limits[6];
+    limits[4] = -limits[5];
+
+    limits[5]++;
+    limits[6]++;
+    limits[7]++;
+    limits[8]++;
+    limits[9]++;
+
+    int index = 0;
+    int index2 = 0;
+    int index3 = 0;
+    matrix->row_ptr[0] = 0;
+    for(int i = 0; i < n_rows; i++){
+
+        int row_width = index;
+        for(int j = fmax(0, limits[0]); j < fmax(0, limits[1]); j++)
+            matrix->col_ind[index++] = j;
+
+        for(int j = fmax(0, limits[2]); j < fmax(0, limits[3]); j++)
+            matrix->col_ind[index++] = j;
+
+        for(int j = fmax(0,limits[4]); j < fmin(limits[5], n_cols); j++)
+            matrix->col_ind[index++] = j;
+
+        for(int j = fmin(n_cols, limits[6]); j < fmin(n_cols, limits[7]); j++)
+            matrix->col_ind[index++] = j;
+
+        for(int j = fmin(n_cols, limits[8]); j < fmin(n_cols, limits[9]); j++)
+            matrix->col_ind[index++] = j;
+
+        row_width = index - row_width;
+        matrix->row_ptr[index2+1] = matrix->row_ptr[index2] + row_width;
+        index2++;
+        
+        for(int j = 0; j < row_width; j++)
+            matrix->values[index3++] = (float)rand()/RAND_MAX;
+        
+
+        for(int j = 0; j < 10; j++)
+            limits[j]++;
+    }
+
+    return matrix;
     return NULL;
 }
 
@@ -185,7 +262,13 @@ s_matrix_t* convert_to_s_matrix(csr_matrix_t* csr){
     return NULL;
 }
 
-void multiply(s_matrix_t* m, float* v, float* r){
+void multiply(csr_matrix_t* m, float* v, float* r){
+    for(int i = 109; i < m->n_row_ptr-1; i++){
+        
+        for(int j = m->row_ptr[i]; j < m->row_ptr[i+1]; j++){
+            r[i] += v[m->col_ind[j]] * m->values[j];
+        }
+    }
 }
 
 
@@ -220,7 +303,7 @@ int main(int argc, char** argv){
     //s_matrix_t* s = convert_to_s_matrix(m);
     
     gettimeofday(&start, NULL);
-    multiply(s,v,r2);
+    multiply(m,v,r2);
     gettimeofday(&end, NULL);
     
     print_time(start, end);
