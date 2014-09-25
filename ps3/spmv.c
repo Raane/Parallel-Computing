@@ -296,30 +296,32 @@ void multiply(s_matrix_t* m, float* v, float* r, int dim, int a, int b, int c, i
   for(int i = 0; i < dim; i++){
 
     for(int j = fmax(0, limits[0]); j < fmax(0, limits[1]); j++) {
-      /*if(i>99999)printf("i %d:\n", i);
-      if(j>99999)printf("j %d:\n", j);
-      if(index4>99999)printf("index4 %d:\n", index4);*/
       r[i] += v[j] * m->matrix[index4];
+      index4++;
       //r[0] = v[0] * m->matrix[0];
     }
 
     for(int j = fmax(0, limits[2]); j < fmax(0, limits[3]); j++){
       r[i] += v[j] * m->matrix[index4];
+      index4++;
       //r[0] = 0.1;
     }
 
     for(int j = fmax(0,limits[4]); j < fmin(limits[5], dim); j++){
       r[i] += v[j] * m->matrix[index4];
+      index4++;
       //r[0] = 0.1;
     }
 
     for(int j = fmin(dim, limits[6]); j < fmin(dim, limits[7]); j++){
       r[i] += v[j] * m->matrix[index4];
+      index4++;
       //r[0] = 0.1;
     }
 
     for(int j = fmin(dim, limits[8]); j < fmin(dim, limits[9]); j++){
       r[i] += v[j] * m->matrix[index4];
+      index4++;
       //r[0] = 0.1;
     }
 
