@@ -258,8 +258,9 @@ s_matrix_t* create_s_matrix(int dim, int a, int b, int c, int d, int e){
 
 s_matrix_t* convert_to_s_matrix(csr_matrix_t* csr){
   s_matrix_t* matrix = (s_matrix_t*)malloc(sizeof(s_matrix_t));
-  matrix->matrix = (float*)malloc(sizeof(float)*csr->size);
-  matrix->size = csr->size;
+  printf("n_values: %d\n", csr->n_values);
+  matrix->matrix = (float*)malloc(sizeof(float)*csr->n_values);
+  matrix->size = csr->n_values;
   for(int i=0;i<matrix->size;i++) {
     matrix->matrix[i] = csr->values[i];
   }
@@ -267,12 +268,6 @@ s_matrix_t* convert_to_s_matrix(csr_matrix_t* csr){
 }
 
 void multiply(s_matrix_t* m, float* v, float* r, int dim, int a, int b, int c, int d, int e){
-  for(int i = 0; i < m->n_row_ptr-1; i++){
-    for(int j = m->row_ptr[i]; j < m->row_ptr[i+1]; j++){
-      r[i] += v[m->col_ind[j]] * m->values[j];
-    }
-  }
-
   int ah = a/2;
 
   int limits[10];
@@ -300,44 +295,40 @@ void multiply(s_matrix_t* m, float* v, float* r, int dim, int a, int b, int c, i
   //matrix->row_ptr[0] = 0;
   for(int i = 0; i < dim; i++){
 
-    int row_width = index;
     for(int j = fmax(0, limits[0]); j < fmax(0, limits[1]); j++) {
-      r[i] += v[i] * m->matrix[index4];
-      index4++;
+      /*if(i>99999)printf("i %d:\n", i);
+      if(j>99999)printf("j %d:\n", j);
+      if(index4>99999)printf("index4 %d:\n", index4);*/
+      r[i] += v[j] * m->matrix[index4];
+      //r[0] = v[0] * m->matrix[0];
     }
 
     for(int j = fmax(0, limits[2]); j < fmax(0, limits[3]); j++){
-      r[i] += v[i] * m->matrix[index4];
-      index4++;
+      r[i] += v[j] * m->matrix[index4];
+      //r[0] = 0.1;
     }
 
     for(int j = fmax(0,limits[4]); j < fmin(limits[5], dim); j++){
-      r[i] += v[i] * m->matrix[index4];
-      index4++;
+      r[i] += v[j] * m->matrix[index4];
+      //r[0] = 0.1;
     }
 
     for(int j = fmin(dim, limits[6]); j < fmin(dim, limits[7]); j++){
-      r[i] += v[i] * m->matrix[index4];
-      index4++;
+      r[i] += v[j] * m->matrix[index4];
+      //r[0] = 0.1;
     }
 
     for(int j = fmin(dim, limits[8]); j < fmin(dim, limits[9]); j++){
-      r[i] += v[i] * m->matrix[index4];
-      index4++;
+      r[i] += v[j] * m->matrix[index4];
+      //r[0] = 0.1;
     }
 
-    row_width = index - row_width;
-    //matrix->row_ptr[index2+1] = matrix->row_ptr[index2] + row_width;
     index2++;
 
-    /*for(int j = 0; j < row_width; j++)
-      matrix->values[index3++] = (float)rand()/RAND_MAX;
-
-*/
     for(int j = 0; j < 10; j++)
       limits[j]++;
-  }
 
+  }
 }
 
 
@@ -368,11 +359,11 @@ int main(int argc, char** argv){
 
   print_time(start, end);
 
-  s_matrix_t* s = create_s_matrix(dim, a, b, c, d, e);
-  //s_matrix_t* s = convert_to_s_matrix(m);
+  //s_matrix_t* s = create_s_matrix(dim, a, b, c, d, e);
+  s_matrix_t* s = convert_to_s_matrix(m);
 
   gettimeofday(&start, NULL);
-  multiply(m,v,r2);
+  multiply(s,v,r2, dim, a, b, c, d, e);
   gettimeofday(&end, NULL);
 
   print_time(start, end);
