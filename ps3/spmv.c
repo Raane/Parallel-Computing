@@ -258,7 +258,6 @@ s_matrix_t* create_s_matrix(int dim, int a, int b, int c, int d, int e){
 
 s_matrix_t* convert_to_s_matrix(csr_matrix_t* csr){
   s_matrix_t* matrix = (s_matrix_t*)malloc(sizeof(s_matrix_t));
-  printf("n_values: %d\n", csr->n_values);
   matrix->matrix = (float*)malloc(sizeof(float)*csr->n_values);
   matrix->size = csr->n_values;
   for(int i=0;i<matrix->size;i++) {
@@ -288,41 +287,44 @@ void multiply(s_matrix_t* m, float* v, float* r, int dim, int a, int b, int c, i
   limits[8]++;
   limits[9]++;
 
-  int index = 0;
   int index2 = 0;
-  int index3 = 0;
   int index4 = 0;
-  //matrix->row_ptr[0] = 0;
+
   for(int i = 0; i < dim; i++){
-
-    for(int j = fmax(0, limits[0]); j < fmax(0, limits[1]); j++) {
+    int from_and_to[10];
+    from_and_to[0] = fmax(0,limits[0]);
+    from_and_to[1] = fmax(0,limits[1]);
+    from_and_to[2] = fmax(0,limits[2]);
+    from_and_to[3] = fmax(0,limits[3]);
+    from_and_to[4] = fmax(0,limits[4]);
+    from_and_to[5] = fmin(limits[5],dim);
+    from_and_to[6] = fmin(limits[6],dim);
+    from_and_to[7] = fmin(limits[7],dim);
+    from_and_to[8] = fmin(limits[8],dim);
+    from_and_to[9] = fmin(limits[9],dim);
+    for(int j = from_and_to[0]; j < from_and_to[1]; j++) {
       r[i] += v[j] * m->matrix[index4];
       index4++;
-      //r[0] = v[0] * m->matrix[0];
     }
 
-    for(int j = fmax(0, limits[2]); j < fmax(0, limits[3]); j++){
+    for(int j = from_and_to[2]; j < from_and_to[3]; j++){
       r[i] += v[j] * m->matrix[index4];
       index4++;
-      //r[0] = 0.1;
     }
 
-    for(int j = fmax(0,limits[4]); j < fmin(limits[5], dim); j++){
+    for(int j = from_and_to[4]; j < from_and_to[5]; j++){
       r[i] += v[j] * m->matrix[index4];
       index4++;
-      //r[0] = 0.1;
     }
 
-    for(int j = fmin(dim, limits[6]); j < fmin(dim, limits[7]); j++){
+    for(int j = from_and_to[6]; j < from_and_to[7]; j++){
       r[i] += v[j] * m->matrix[index4];
       index4++;
-      //r[0] = 0.1;
     }
 
-    for(int j = fmin(dim, limits[8]); j < fmin(dim, limits[9]); j++){
+    for(int j = from_and_to[8]; j < from_and_to[9]; j++){
       r[i] += v[j] * m->matrix[index4];
       index4++;
-      //r[0] = 0.1;
     }
 
     index2++;
