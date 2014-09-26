@@ -24,6 +24,8 @@ int diag_count(int dim, int n){
   return n*dim - ((n*(n+1))/2);
 }
 
+
+
 void print_raw_csr_matrix(csr_matrix_t* m){
   printf("row_ptr = {");
   for(int i = 0; i < m->n_row_ptr; i++)
@@ -180,82 +182,13 @@ void compare(float* a, float* b, int n){
   printf("%d more errors...\n", n_errors - 10);
 }
 
-
+// Unused because convertion from csr is used.
 s_matrix_t* create_s_matrix(int dim, int a, int b, int c, int d, int e){
-  /*s_matrix_t* matrix = (s_matrix_t*)malloc(sizeof(s_matrix_t));
-
-    matrix->matrix = (int*)malloc(sizeof(int) * (n_rows+1));
-
-    int ah = a/2;
-    int size = diag_count(n_rows,ah);
-    size += (diag_count(n_rows,ah+b+c) - diag_count(n_rows,ah+b));
-    size += (diag_count(n_rows,ah+b+c+d+e) - diag_count(n_rows,ah+b+c+d));
-    size = size*2 + n_rows;
-
-    matrix->matrix = (float*)malloc(sizeof(float)*size);
-    matrix->size = size;
-    matrix->a = a;
-    matrix->b = b;
-    matrix->c = c;
-    matrix->d = d;
-    matrix->e = e;
-
-    int limits[10];
-    limits[5] = ah;
-    limits[6] = ah + b;
-    limits[7] = ah + b + c;
-    limits[8] = ah + b + c + d;
-    limits[9] = ah + b + c + d + e;
-    limits[0] = -limits[9];
-    limits[1] = -limits[8];
-    limits[2] = -limits[7];
-    limits[3] = -limits[6];
-    limits[4] = -limits[5];
-
-    limits[5]++;
-    limits[6]++;
-    limits[7]++;
-    limits[8]++;
-    limits[9]++;
-
-    int index = 0;
-    int index2 = 0;
-    int index3 = 0;
-  //matrix->row_ptr[0] = 0;
-  for(int i = 0; i < n_rows; i++){
-
-  int row_width = index;
-  for(int j = fmax(0, limits[0]); j < fmax(0, limits[1]); j++)
-  matrix->col_ind[index++] = j;
-
-  for(int j = fmax(0, limits[2]); j < fmax(0, limits[3]); j++)
-  matrix->col_ind[index++] = j;
-
-  for(int j = fmax(0,limits[4]); j < fmin(limits[5], n_cols); j++)
-  matrix->col_ind[index++] = j;
-
-  for(int j = fmin(n_cols, limits[6]); j < fmin(n_cols, limits[7]); j++)
-  matrix->col_ind[index++] = j;
-
-  for(int j = fmin(n_cols, limits[8]); j < fmin(n_cols, limits[9]); j++)
-  matrix->col_ind[index++] = j;
-
-  row_width = index - row_width;
-  matrix->row_ptr[index2+1] = matrix->row_ptr[index2] + row_width;
-  index2++;
-
-  for(int j = 0; j < row_width; j++)
-  matrix->values[index3++] = (float)rand()/RAND_MAX;
-
-
-  for(int j = 0; j < 10; j++)
-  limits[j]++;
-  }
-
-  return matrix;*/
   return NULL;
 }
 
+// Discard everything except the values of the matrix itself. The position in the matrix
+// can be found later mathematically by using the known structure of the matrix.
 s_matrix_t* convert_to_s_matrix(csr_matrix_t* csr){
   s_matrix_t* matrix = (s_matrix_t*)malloc(sizeof(s_matrix_t));
   matrix->matrix = (float*)malloc(sizeof(float)*csr->n_values);
@@ -266,6 +199,8 @@ s_matrix_t* convert_to_s_matrix(csr_matrix_t* csr){
   return matrix;
 }
 
+// This multiply work by calculating the location of the data in the matrix format.
+// Then the actual multiplication is executed.
 void multiply(s_matrix_t* m, float* v, float* r, int dim, int a, int b, int c, int d, int e){
   int ah = a/2;
 
@@ -287,10 +222,9 @@ void multiply(s_matrix_t* m, float* v, float* r, int dim, int a, int b, int c, i
   limits[8]++;
   limits[9]++;
 
-  int index2 = 0;
-  int index4 = 0;
+  int index = 0;
 
-  for(int i = 0; i < dim; i++){
+  for(int i= 0; i < dim; i++){
     int from_and_to[10];
     from_and_to[0] = fmax(0,limits[0]);
     from_and_to[1] = fmax(0,limits[1]);
@@ -303,31 +237,29 @@ void multiply(s_matrix_t* m, float* v, float* r, int dim, int a, int b, int c, i
     from_and_to[8] = fmin(limits[8],dim);
     from_and_to[9] = fmin(limits[9],dim);
     for(int j = from_and_to[0]; j < from_and_to[1]; j++) {
-      r[i] += v[j] * m->matrix[index4];
-      index4++;
+      r[i] += v[j] * m->matrix[index];
+      index++;
     }
 
     for(int j = from_and_to[2]; j < from_and_to[3]; j++){
-      r[i] += v[j] * m->matrix[index4];
-      index4++;
+      r[i] += v[j] * m->matrix[index];
+      index++;
     }
 
     for(int j = from_and_to[4]; j < from_and_to[5]; j++){
-      r[i] += v[j] * m->matrix[index4];
-      index4++;
+      r[i] += v[j] * m->matrix[index];
+      index++;
     }
 
     for(int j = from_and_to[6]; j < from_and_to[7]; j++){
-      r[i] += v[j] * m->matrix[index4];
-      index4++;
+      r[i] += v[j] * m->matrix[index];
+      index++;
     }
 
     for(int j = from_and_to[8]; j < from_and_to[9]; j++){
-      r[i] += v[j] * m->matrix[index4];
-      index4++;
+      r[i] += v[j] * m->matrix[index];
+      index++;
     }
-
-    index2++;
 
     for(int j = 0; j < 10; j++)
       limits[j]++;
@@ -363,7 +295,6 @@ int main(int argc, char** argv){
 
   print_time(start, end);
 
-  //s_matrix_t* s = create_s_matrix(dim, a, b, c, d, e);
   s_matrix_t* s = convert_to_s_matrix(m);
 
   gettimeofday(&start, NULL);
