@@ -22,20 +22,21 @@ int main(int argc, char** argv){
 
   int* histogram = (int*)calloc(sizeof(int), color_depth);
   int** histograms = (int**)malloc(sizeof(int*)*n_threads);
+  // This for loop have very few iterations so I will not parallelize it (the overhead is greater than the gain)
   for(int i=0;i<n_threads;i++) {
     histograms[i] = (int*)calloc(sizeof(int), color_depth);
   }
   #pragma omp parallel for
   for(int i = 0; i < image_size; i++){
-    //histograms[omp_get_thread_num()][image[i]]++;
-    histograms[1][image[i]]++;
-    //printf("Thread: %d, num%d\n", omp_get_thread_num(), omp_get_num_threads());
+    histograms[omp_get_thread_num()][image[i]]++;
   }
-  /*for(int i=0;i<color_depth;i++) {
-    for(int j=0;j<omp_get_num_threads();j++) {
+  #pragma omp parallel for
+  for(int i=0;i<color_depth;i++) {
+  // This inner loop write to a shared variable and can not be parallelized
+    for(int j=0;j<n_threads;j++) {
       histogram[i] += histograms[j][i];
     }
-  }*/
+  }
 
 
   float* transfer_function = (float*)calloc(sizeof(float), color_depth);
