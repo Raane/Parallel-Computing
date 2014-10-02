@@ -20,12 +20,22 @@ int main(int argc, char** argv){
   unsigned char* fasit = read_bmp("fasit.bmp");
   unsigned char* output_image = malloc(sizeof(unsigned char) * image_size);
 
-
   int* histogram = (int*)calloc(sizeof(int), color_depth);
+  int** histograms = (int**)malloc(sizeof(int*)*n_threads);
+  for(int i=0;i<n_threads;i++) {
+    histograms[i] = (int*)calloc(sizeof(int), color_depth);
+  }
   #pragma omp parallel for
   for(int i = 0; i < image_size; i++){
-    histogram[image[i]]++;
+    //histograms[omp_get_thread_num()][image[i]]++;
+    histograms[1][image[i]]++;
+    //printf("Thread: %d, num%d\n", omp_get_thread_num(), omp_get_num_threads());
   }
+  /*for(int i=0;i<color_depth;i++) {
+    for(int j=0;j<omp_get_num_threads();j++) {
+      histogram[i] += histograms[j][i];
+    }
+  }*/
 
 
   float* transfer_function = (float*)calloc(sizeof(float), color_depth);
