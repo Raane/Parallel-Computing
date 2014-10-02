@@ -8,6 +8,7 @@ const int image_height = 512;
 const int image_size = 512*512;
 const int color_depth = 255;
 
+
 int main(int argc, char** argv){
 
   if(argc != 3){
@@ -25,11 +26,11 @@ int main(int argc, char** argv){
   for(int i=0;i<n_threads;i++) {
     histograms[i] = (int*)calloc(sizeof(int), color_depth);
   }
-  #pragma omp parallel for
+  #pragma omp parallel for num_threads(n_threads)
   for(int i = 0; i < image_size; i++){
     histograms[omp_get_thread_num()][image[i]]++;
   }
-  #pragma omp parallel for
+  #pragma omp parallel for num_threads(n_threads)
   for(int i=0;i<color_depth;i++) {
     for(int j=0;j<n_threads;j++) {
       histogram[i] += histograms[j][i];
