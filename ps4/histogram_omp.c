@@ -21,12 +21,14 @@ int main(int argc, char** argv){
 
 
     int* histogram = (int*)calloc(sizeof(int), color_depth);
+    #pragma omp parallel for
     for(int i = 0; i < image_size; i++){
         histogram[image[i]]++;
     }
 
 
     float* transfer_function = (float*)calloc(sizeof(float), color_depth);
+    #pragma omp parallel for
     for(int i = 0; i < color_depth; i++){
         for(int j = 0; j < i+1; j++){
             transfer_function[i] += color_depth*((float)histogram[j])/(image_size);
