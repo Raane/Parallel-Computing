@@ -17,7 +17,6 @@ int main(int argc, char** argv){
   int n_threads = atoi(argv[2]);
 
   unsigned char* image = read_bmp(argv[1]);
-  unsigned char* fasit = read_bmp("fasit.bmp");
   unsigned char* output_image = malloc(sizeof(unsigned char) * image_size);
 
   int* histogram = (int*)calloc(sizeof(int), color_depth);
@@ -32,7 +31,6 @@ int main(int argc, char** argv){
   }
   #pragma omp parallel for
   for(int i=0;i<color_depth;i++) {
-  // This inner loop write to a shared variable and can not be parallelized
     for(int j=0;j<n_threads;j++) {
       histogram[i] += histograms[j][i];
     }
@@ -40,6 +38,8 @@ int main(int argc, char** argv){
 
 
   float* transfer_function = (float*)calloc(sizeof(float), color_depth);
+  // The inner loop can not be parallelized, as it would cause race conditions. The outer loop 
+  // iterations can be parallelized without and hazards.
   #pragma omp parallel for
   for(int i = 0; i < color_depth; i++){
     for(int j = 0; j < i+1; j++){
@@ -47,13 +47,17 @@ int main(int argc, char** argv){
     }
   }
 
-
+  // Each loop iteration work on a different array position, so this can be parallelized without any race conditions.
+  #pragma omp parallel for
   for(int i = 0; i < image_size; i++){
     output_image[i] = transfer_function[image[i]];
   }
 
   write_bmp(output_image, image_width, image_height);
 
+  // A little code snippet to compare the result to a correct.bmp image.
+  // This is here just for testing.
+  unsigned char* fasit = read_bmp("correct.bmp");
   int no_errors = 1;
   for(int i=0;i<image_size;i++) {
     if(!(output_image[i] == fasit[i]
