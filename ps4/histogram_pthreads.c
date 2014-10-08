@@ -87,10 +87,9 @@ int main(int argc, char** argv){
     pthread_create(&threads[thread], NULL, threaded_histogram_count, (void *)a);
   }
   for(int i = 0; i < n_threads; i++) pthread_join(threads[i], NULL); // Wait for all threads to finish
-  /*for(int i = 0; i < image_size; i++){
-    histogram[image[i]]++;
-  }*/
-  //For each cell in the local histogram, add it to the global histogram
+  // For each cell in the local histogram, add it to the global histogram
+  // For the color depths used in these example images, paralellizing this is not that usefull,
+  // For images with larger color depth however, it's quite usefull.
   for(int thread = 0; thread<n_threads; thread++) {
     histogram_sum_args* a = malloc(sizeof(histogram_sum_args));
     a->n_threads = n_threads;

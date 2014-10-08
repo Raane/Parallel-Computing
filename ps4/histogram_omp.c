@@ -26,10 +26,14 @@ int main(int argc, char** argv){
   for(int i=0;i<n_threads;i++) {
     histograms[i] = (int*)calloc(sizeof(int), color_depth);
   }
+  //For each pixel, increment the correct cell in the local histogram
   #pragma omp parallel for num_threads(n_threads)
   for(int i = 0; i < image_size; i++){
     histograms[omp_get_thread_num()][image[i]]++;
   }
+  //For each cell in the local histogram, add it to the global histogram
+  //For the color depths used in these example images, paralellizing this is not that usefull,
+  //For images with larger color depth however, it's quite usefull.
   #pragma omp parallel for num_threads(n_threads)
   for(int i=0;i<color_depth;i++) {
     for(int j=0;j<n_threads;j++) {
