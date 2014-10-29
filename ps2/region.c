@@ -97,10 +97,10 @@ void distribute_image(){
       for(int row=0;row<image_size[1];row++) {
         // Rank 0 itself do not need to send the data, and can simply copy them from memory.
         memcpy(
-          (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
-          (image + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]),
-          local_image_size[0]
-          );
+            (local_image + (local_image_size[0] + 2) * ( row + 1 ) + 1),
+            (image + (coords[1] * local_image_size[1] + row) * image_size[0] + coords[0] * local_image_size[0]),
+            local_image_size[0]
+            );
       }
     } else {
       for(int row=0;row<image_size[1];row++) {
@@ -182,7 +182,7 @@ void receive_image_border(int direction) {
             (local_image + row * (local_image_size[0] + 2) + local_image_size[0]+2), 
             1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
       }
-      
+
     }
   }
 }
@@ -243,7 +243,7 @@ void receive_region_border(int direction, stack_t* stack) {
   if(sender!=-2) {
     if(direction%2==0) {
       // Horizontal borders.
-      int row = direction==0?0:local_image_size[1];
+      int row = direction==2?0:local_image_size[1];
       unsigned char* received_border = malloc(local_image_size[0] * sizeof(unsigned char));
       MPI_Recv(received_border, local_image_size[0], MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
       for(int i=0;i<local_image_size[0];i++) {
@@ -260,7 +260,7 @@ void receive_region_border(int direction, stack_t* stack) {
     } else {
       // Vertical borders.
       for(int row=1;row<local_image_size[1]-1;row++) {
-        int col = direction==3?0:local_image_size[0]+2;
+        int col = direction==1?0:local_image_size[0]+2;
         unsigned char* received_border = malloc(sizeof(unsigned char));
         MPI_Recv(received_border, 1, MPI_UNSIGNED_CHAR, sender, 0, MPI_COMM_WORLD, &status);
         if(received_border[0] == 1) {
@@ -398,7 +398,6 @@ void grow_region(stack_t* stack) {
   }
 }
 
-
 // MPI initialization, setting up cartesian communicator
 void init_mpi(int argc, char** argv){
   MPI_Init(&argc, &argv);
@@ -412,7 +411,6 @@ void init_mpi(int argc, char** argv){
   MPI_Cart_shift( cart_comm, 0, 1, &north, &south );
   MPI_Cart_shift( cart_comm, 1, 1, &west, &east );
 }
-
 
 void load_and_allocate_images(int argc, char** argv){
 
@@ -443,7 +441,6 @@ void write_image(){
     write_bmp(image, image_size[0], image_size[1]);
   }
 }
-
 
 int main(int argc, char** argv){
 
