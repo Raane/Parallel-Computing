@@ -46,7 +46,7 @@ int3 pop(stack_t* stack){
 }
 
 // float3 utilities
-__device__ float3 cross(float3 a, float3 b){
+__device__ __host__ float3 cross(float3 a, float3 b){
   float3 c;
   c.x = a.y*b.z - a.z*b.y;
   c.y = a.z*b.x - a.x*b.z;
@@ -55,7 +55,7 @@ __device__ float3 cross(float3 a, float3 b){
   return c;
 }
 
-__device__ float3 normalize(float3 v){
+__device__ __host__ float3 normalize(float3 v){
   float l = sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
   v.x /= l;
   v.y /= l;
@@ -64,7 +64,7 @@ __device__ float3 normalize(float3 v){
   return v;
 }
 
-__device__ float3 add(float3 a, float3 b){
+__device__ __host__ float3 add(float3 a, float3 b){
   a.x += b.x;
   a.y += b.y;
   a.z += b.z;
@@ -72,7 +72,7 @@ __device__ float3 add(float3 a, float3 b){
   return a;
 }
 
-__device__ float3 scale(float3 a, float b){
+__device__ __host__ float3 scale(float3 a, float b){
   a.x *= b;
   a.y *= b;
   a.z *= b;
@@ -142,7 +142,7 @@ unsigned char* create_data(){
 }
 
 // Checks if position is inside the volume (float3 and int3 versions)
-__device__ int inside(float3 pos){
+__device__ __host__ int inside(float3 pos){
   int x = (pos.x >= 0 && pos.x < DATA_DIM-1);
   int y = (pos.y >= 0 && pos.y < DATA_DIM-1);
   int z = (pos.z >= 0 && pos.z < DATA_DIM-1);
@@ -159,12 +159,12 @@ int inside(int3 pos){
 }
 
 // Indexing function (note the argument order)
-__device__ int index(int z, int y, int x){
+__device__ __host__ int index(int z, int y, int x){
   return z * DATA_DIM*DATA_DIM + y*DATA_DIM + x;
 }
 
 // Trilinear interpolation
-__device__ float value_at(float3 pos, unsigned char* data){
+__device__ __host__ float value_at(float3 pos, unsigned char* data){
   if(!inside(pos)){
     return 0;
   }
@@ -197,7 +197,7 @@ __device__ float value_at(float3 pos, unsigned char* data){
 
 
 // Serial ray casting
-/*unsigned char* raycast_serial(unsigned char* data, unsigned char* region){
+unsigned char* raycast_serial(unsigned char* data, unsigned char* region){
   unsigned char* image = (unsigned char*)malloc(sizeof(unsigned char)*IMAGE_DIM*IMAGE_DIM);
 
   // Camera/eye position, and direction of viewing. These can be changed to look
@@ -248,7 +248,7 @@ __device__ float value_at(float3 pos, unsigned char* data){
   }
 
   return image;
-}*/
+}
 
 
 // Check if two values are similar, threshold can be changed.
@@ -321,15 +321,10 @@ __global__ void raycast_kernel(unsigned char* data, unsigned char* image, unsign
 
   float fov = 3.14/4;
   float pixel_width = tan(fov/2.0)/(IMAGE_DIM/2);
-  float step_size = 0.5;
+  float step_size = 2.5;
 
   int x = -IMAGE_DIM/2 + blockIdx.x * blockDim.x + threadIdx.x;
   int y = -IMAGE_DIM/2 + blockIdx.y * blockDim.y + threadIdx.y;
-  if(threadIdx.x==0 && threadIdx.y==0 && blockIdx.x==0 && blockIdx.y==0) {
-    //printf("x: %i, y: %i\n", x, y);
-  }
-
-  // For each pixel 
 
   // Find the ray for this pixel
   float3 screen_center = add(camera, forward);
@@ -349,12 +344,6 @@ __global__ void raycast_kernel(unsigned char* data, unsigned char* image, unsign
     int r = value_at(pos, region);                  // Check if we're in the region
     color += value_at(pos, data)*(0.01 + r) ;       // Update the color based on data value, and if we're in the region
   }
-
-  /*if(x>-50 && x<50 && y>-50 && y<50) {
-    printf("x: %i, y: %i\n", x, y);
-    color = 255;
-  } else {
-  }*/
   // Write final color to image
   image[(y+(IMAGE_DIM/2)) * IMAGE_DIM + (x+(IMAGE_DIM/2))] = color > 255 ? 255 : color;
 }
@@ -478,6 +467,7 @@ int main(int argc, char** argv){
   //printf("Region grown");
 
   unsigned char* image = raycast_gpu(data, region);
+  //unsigned char* image = raycast_serial(data, region);
 
   write_bmp(image, IMAGE_DIM, IMAGE_DIM);
 }
