@@ -150,7 +150,7 @@ __device__ __host__ int inside(float3 pos){
   return x && y && z;
 }
 
-int inside(int3 pos){
+__device__ __host__ int inside(int3 pos){
   int x = (pos.x >= 0 && pos.x < DATA_DIM);
   int y = (pos.y >= 0 && pos.y < DATA_DIM);
   int z = (pos.z >= 0 && pos.z < DATA_DIM);
@@ -252,7 +252,7 @@ unsigned char* raycast_serial(unsigned char* data, unsigned char* region){
 
 
 // Check if two values are similar, threshold can be changed.
-int similar(unsigned char* data, int3 a, int3 b){
+__device__ __host__ int similar(unsigned char* data, int3 a, int3 b){
   unsigned char va = data[a.z * DATA_DIM*DATA_DIM + a.y*DATA_DIM + a.x];
   unsigned char vb = data[b.z * DATA_DIM*DATA_DIM + b.y*DATA_DIM + b.x];
 
@@ -387,19 +387,17 @@ unsigned char* raycast_gpu_texture(unsigned char* data, unsigned char* region){
 
 
 __global__ void region_grow_kernel(unsigned char* data, unsigned char* region, int* finished){
-  unsigned char* region = (unsigned char*)calloc(sizeof(unsigned char), DATA_DIM*DATA_DIM*DATA_DIM);
-
-  int x = blockIdx.x * blockDim + threadIdx.x;
-  int y = blockIdx.y * blockDim + threadIdx.y;
-  int z = blockIdx.z * blockDim + threadIdx.z;
+  int x = blockIdx.x * blockDim.x + threadIdx.x;
+  int y = blockIdx.y * blockDim.y + threadIdx.y;
+  int z = blockIdx.z * blockDim.z + threadIdx.z;
 
   int dx[6] = {-1,1,0,0,0,0};
   int dy[6] = {0,0,-1,1,0,0};
   int dz[6] = {0,0,0,0,-1,1};
 
-  int3 pixel = {.x=x .y=y .z=z};
+  int3 pixel = {.x=x, .y=y, .z=z};
   if(region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x]==2){
-    region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x] = 1;
+    region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = 1;
     for(int n = 0; n < 6; n++){
       int3 candidate = pixel;
       candidate.x += dx[n];
@@ -431,7 +429,7 @@ __global__ void region_grow_kernel_shared(unsigned char* data, unsigned char* re
 unsigned char* grow_region_gpu(unsigned char* data){
   unsigned char* region = (unsigned char*)calloc(sizeof(unsigned char), DATA_DIM*DATA_DIM*DATA_DIM);
   int* finished = (int*)malloc(sizeof(int));
-  finished[0] = 1;
+    finished[0] = 0;
 
   int3 seed = {.x=50, .y=300, .z=300};
   region[seed.z *DATA_DIM*DATA_DIM + seed.y*DATA_DIM + seed.x] = 2;
@@ -444,18 +442,20 @@ unsigned char* grow_region_gpu(unsigned char* data){
   cudaMalloc( (void**)&finished_device, sizeof(int));
   cudaMemcpy( data_device, data, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
   cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
-  cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
+  //cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
 
   dim3 dimBlock( 8, 8, 8 );
   dim3 dimGrid( 64, 64, 64 );
 
-  while(finished > 0){
-
+  while(finished[0] == 0){
+    finished[0] = 1;
+    cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
     region_grow_kernel<<<dimGrid, dimBlock>>>(data_device, region_device, finished_device);
     cudaMemcpy( finished, finished_device, sizeof(int), cudaMemcpyDeviceToHost);
+    printf("Finished: %i\n", finished[0]);
 
   }
-
+  cudaMemcpy( region, region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyDeviceToHost);
   return region;
   }
 
@@ -473,7 +473,7 @@ int main(int argc, char** argv){
 
   //printf("Data created");
 
-  unsigned char* region = grow_region_serial(data);
+  unsigned char* region = grow_region_gpu(data);
 
   //printf("Region grown");
 
