@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <cuda.h>
 #include <math.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include "bmp.h"
 
@@ -396,25 +398,27 @@ __global__ void region_grow_kernel(unsigned char* data, unsigned char* region, i
   int dz[6] = {0,0,0,0,-1,1};
 
   int3 pixel = {.x=x, .y=y, .z=z};
-  if(region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x]==2){
-    region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = 1;
-    for(int n = 0; n < 6; n++){
-      int3 candidate = pixel;
-      candidate.x += dx[n];
-      candidate.y += dy[n];
-      candidate.z += dz[n];
+  for(int i=0;i<40;i++) {
+    if(region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x]==2){
+      region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = 1;
+      for(int n = 0; n < 6; n++){
+        int3 candidate = pixel;
+        candidate.x += dx[n];
+        candidate.y += dy[n];
+        candidate.z += dz[n];
 
-      if(!inside(candidate)){
-        continue;
-      }
+        if(!inside(candidate)){
+          continue;
+        }
 
-      if(region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x]){
-        continue;
-      }
+        if(region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x]){
+          continue;
+        }
 
-      if(similar(data, pixel, candidate)){
-        region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x] = 2;
-        finished[0]=0;
+        if(similar(data, pixel, candidate)){
+          region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x] = 2;
+          finished[0]=0;
+        }
       }
     }
   }
@@ -452,8 +456,6 @@ unsigned char* grow_region_gpu(unsigned char* data){
     cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
     region_grow_kernel<<<dimGrid, dimBlock>>>(data_device, region_device, finished_device);
     cudaMemcpy( finished, finished_device, sizeof(int), cudaMemcpyDeviceToHost);
-    printf("Finished: %i\n", finished[0]);
-
   }
   cudaMemcpy( region, region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyDeviceToHost);
   return region;
@@ -465,20 +467,35 @@ unsigned char* grow_region_gpu_shared(unsigned char* data){
 }
 
 
+void print_time(struct timeval start, struct timeval end){
+  long int ms = ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec));
+  double s = ms/1e6;
+  printf("Time : %f s\n", s);
+}
+
 int main(int argc, char** argv){
 
   print_properties();
+
+  struct timeval start, end;
 
   unsigned char* data = create_data();
 
   //printf("Data created");
 
+  gettimeofday(&start, NULL);
   unsigned char* region = grow_region_gpu(data);
+  //unsigned char* region = grow_region_serial(data);
+  gettimeofday(&end, NULL);
+  print_time(start, end);
 
   //printf("Region grown");
 
+  gettimeofday(&start, NULL);
   unsigned char* image = raycast_gpu(data, region);
   //unsigned char* image = raycast_serial(data, region);
+  gettimeofday(&end, NULL);
+  print_time(start, end);
 
   write_bmp(image, IMAGE_DIM, IMAGE_DIM);
 }
