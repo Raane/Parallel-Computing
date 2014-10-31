@@ -485,8 +485,8 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
   cudaMemcpy( image_device, image, DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
 
-  dim3 dimBlock( 32, 32 );
-  dim3 dimGrid( 16, 16 );
+  dim3 dimBlock( 4, 4 );
+  dim3 dimGrid( 128, 128 );
 
   raycast_kernel<<<dimGrid, dimBlock>>>(data_device, image_device, region_device);
 
@@ -546,8 +546,8 @@ unsigned char* raycast_gpu_texture(unsigned char* data, unsigned char* region){
   cudaBindTextureToArray(data_texture, data_array, channelDesc);
   cudaBindTextureToArray(region_texture, region_array, channelDesc);
 
-  dim3 dimBlock( 32, 32 );
-  dim3 dimGrid( 16, 16 );
+  dim3 dimBlock( 8, 8 );
+  dim3 dimGrid( 64, 64 );
 
   raycast_kernel_texture<<<dimGrid, dimBlock>>>(image_device);
 
@@ -726,7 +726,6 @@ unsigned char* grow_region_gpu_shared(unsigned char* data){
   cudaFree(data_device);
   cudaFree(region_device);
   cudaFree(finished_device);
-  printf("seed: %i\n", region[50 *DATA_DIM*DATA_DIM + 300*DATA_DIM + 300]);
   return region;
 }
 
@@ -760,11 +759,11 @@ int main(int argc, char** argv){
     printf("grow_region_gpu:\n");
     print_time(start, end);
 
-    //gettimeofday(&start, NULL);
-    //region = grow_region_serial(data);
-    //gettimeofday(&end, NULL);
-    //printf("grow_region_serial:\n");
-    //print_time(start, end);
+    gettimeofday(&start, NULL);
+    region = grow_region_serial(data);
+    gettimeofday(&end, NULL);
+    printf("grow_region_serial:\n");
+    print_time(start, end);
 
 
     gettimeofday(&start, NULL);
@@ -779,11 +778,11 @@ int main(int argc, char** argv){
     printf("raycast_gpu:\n");
     print_time(start, end);
 
-    //gettimeofday(&start, NULL);
-    //image = raycast_serial(data, region);
-    //gettimeofday(&end, NULL);
-    //printf("raycast_serial:\n");
-    //print_time(start, end);
+    gettimeofday(&start, NULL);
+    image = raycast_serial(data, region);
+    gettimeofday(&end, NULL);
+    printf("raycast_serial:\n");
+    print_time(start, end);
 } else {
     gettimeofday(&start, NULL);
     region = grow_region_gpu(data);
