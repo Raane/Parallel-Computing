@@ -506,15 +506,25 @@ unsigned char* raycast_gpu_texture(unsigned char* data, unsigned char* region){
 
 
 
-  cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32,0,0,0,cudaChannelFormatKindFloat);
+  data_texture.filterMode=cudaFilterModePoint;
+  data_texture.addressMode[0]=cudaAddressModeWrap; 
+  data_texture.addressMode[1]=cudaAddressModeWrap; 
+  data_texture.addressMode[2]=cudaAddressModeClamp; 
+  region_texture.filterMode=cudaFilterModePoint;
+  region_texture.addressMode[0]=cudaAddressModeWrap; 
+  region_texture.addressMode[1]=cudaAddressModeWrap; 
+  region_texture.addressMode[2]=cudaAddressModeClamp; 
+
+  //cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32,0,0,0,cudaChannelFormatKindFloat);
+  cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
 
   cudaExtent extent = make_cudaExtent(512,512,512);
 
   cudaArray* data_array;
   cudaArray* region_array;
 
-  cudaMalloc3DArray(&data_array, &channelDesc, extent, 0);
-  cudaMalloc3DArray(&region_array, &channelDesc, extent, 0);
+  cudaMalloc3DArray(&data_array, &channelDesc, extent);
+  cudaMalloc3DArray(&region_array, &channelDesc, extent);
 
   cudaMemcpy3DParms copyDataParams    = {0};
   cudaMemcpy3DParms copyRegionParams  = {0};
@@ -530,8 +540,8 @@ unsigned char* raycast_gpu_texture(unsigned char* data, unsigned char* region){
   cudaMemcpy3D(&copyDataParams);
   cudaMemcpy3D(&copyRegionParams);
 
-  cudaBindTextureToArray(data_texture, data_array);
-  cudaBindTextureToArray(region_texture, region_array);
+  cudaBindTextureToArray(data_texture, data_array, channelDesc);
+  cudaBindTextureToArray(region_texture, region_array, channelDesc);
 
 
 
@@ -587,7 +597,47 @@ __global__ void region_grow_kernel(unsigned char* data, unsigned char* region, i
 
 
 __global__ void region_grow_kernel_shared(unsigned char* data, unsigned char* region, int* finished){
+  int x = blockIdx.x * blockDim.x + threadIdx.x;
+  int y = blockIdx.y * blockDim.y + threadIdx.y;
+  int z = blockIdx.z * blockDim.z + threadIdx.z;
 
+  int dx[6] = {-1,1,0,0,0,0};
+  int dy[6] = {0,0,-1,1,0,0};
+  int dz[6] = {0,0,0,0,-1,1};
+
+  int3 pixel = {.x=x, .y=y, .z=z};
+
+  __shared__ unsigned char shared_data[DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char)];
+  __shared__ unsigned char shared_region[DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char)];
+  shared_data[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = data[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
+  shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
+
+
+  for(int i=0;i<40;i++) {
+    if(shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x]==2){
+      shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = 1;
+      for(int n = 0; n < 6; n++){
+        int3 candidate = pixel;
+        candidate.x += dx[n];
+        candidate.y += dy[n];
+        candidate.z += dz[n];
+
+        if(!inside(candidate)){
+          continue;
+        }
+
+        if(shared_region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x]){
+          continue;
+        }
+
+        if(similar(data, pixel, candidate)){
+          shared_region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x] = 2;
+          finished[0]=0;
+        }
+      }
+    }
+  }
+  region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
 }
 
 
@@ -627,7 +677,37 @@ unsigned char* grow_region_gpu(unsigned char* data){
 
 
 unsigned char* grow_region_gpu_shared(unsigned char* data){
-  return NULL;
+  unsigned char* region = (unsigned char*)calloc(sizeof(unsigned char), DATA_DIM*DATA_DIM*DATA_DIM);
+  int* finished = (int*)malloc(sizeof(int));
+    finished[0] = 0;
+
+  int3 seed = {.x=50, .y=300, .z=300};
+  region[seed.z *DATA_DIM*DATA_DIM + seed.y*DATA_DIM + seed.x] = 2;
+
+  unsigned char *data_device;
+  unsigned char *region_device;
+  int *finished_device;
+  cudaMalloc( (void**)&data_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
+  cudaMalloc( (void**)&region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
+  cudaMalloc( (void**)&finished_device, sizeof(int));
+  cudaMemcpy( data_device, data, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
+  cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
+  //cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
+
+  dim3 dimBlock( 8, 8, 8 );
+  dim3 dimGrid( 64, 64, 64 );
+
+  while(finished[0] == 0){
+    finished[0] = 1;
+    cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
+    region_grow_kernel<<<dimGrid, dimBlock>>>(data_device, region_device, finished_device);
+    cudaMemcpy( finished, finished_device, sizeof(int), cudaMemcpyDeviceToHost);
+  }
+  cudaMemcpy( region, region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyDeviceToHost);
+  cudaFree(data_device);
+  cudaFree(region_device);
+  cudaFree(finished_device);
+  return region;
 }
 
 
@@ -656,7 +736,8 @@ int main(int argc, char** argv){
   //printf("Region grown");
 
   gettimeofday(&start, NULL);
-  unsigned char* image = raycast_gpu_texture(data, region);
+  //unsigned char* image = raycast_gpu_texture(data, region);
+  unsigned char* image = raycast_gpu(data, region);
   //unsigned char* image = raycast_serial(data, region);
   gettimeofday(&end, NULL);
   print_time(start, end);
