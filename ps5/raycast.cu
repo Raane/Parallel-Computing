@@ -155,6 +155,14 @@ __device__ __host__ int inside(float3 pos){
   return x && y && z;
 }
 
+__device__ __host__ int inside_block(int3 pos, dim3 blockDim, uint3 blockIdx, uint3 threadIdx){
+  int x = (pos.x >= (blockDim.x*blockIdx.x) && pos.x < (blockDim.x*blockIdx.x+threadIdx.x));
+  int y = (pos.y >= (blockDim.y*blockIdx.y) && pos.y < (blockDim.y*blockIdx.y+threadIdx.y));
+  int z = (pos.z >= (blockDim.z*blockIdx.z) && pos.z < (blockDim.z*blockIdx.z+threadIdx.z));
+
+  return x && y && z;
+}
+
 __device__ __host__ int inside(int3 pos){
   int x = (pos.x >= 0 && pos.x < DATA_DIM);
   int y = (pos.y >= 0 && pos.y < DATA_DIM);
@@ -608,44 +616,38 @@ __global__ void region_grow_kernel_shared(unsigned char* data, unsigned char* re
   int3 pixel = {.x=x, .y=y, .z=z};
 
 
-  __shared__ unsigned char shared_data[DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char)];
-  __shared__ unsigned char shared_region[DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char)];
-  shared_data[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = data[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
-  shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
+  __shared__ unsigned char shared_data[8*8*8*sizeof(unsigned char)];
+  __shared__ unsigned char shared_region[8*8*8*sizeof(unsigned char)];
+  shared_data[pixel.z * blockDim.z*blockDim.z + pixel.y*blockDim.y + pixel.x] = data[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
+  shared_region[pixel.z * blockDim.z*blockDim.z + pixel.y*blockDim.y + pixel.x] = region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
 
 
   __syncthreads();
-  if(threadIdx.x!=0&&threadIdx.y!=0&&threadIdx.z!=0
-      &&threadIdx.x!=blockDim.x-1&&threadIdx.y!=blockDim.y-1&&threadIdx.z!=blockDim.z-1) {
-    for(int i=0;i<40;i++) {
-      if(shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x]==2){
-        shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = 1;
-        for(int n = 0; n < 6; n++){
-          int3 candidate = pixel;
-          candidate.x += dx[n];
-          candidate.y += dy[n];
-          candidate.z += dz[n];
+  for(int i=0;i<40;i++) {
+    if(shared_region[pixel.z * blockDim.z*blockDim.z + pixel.y*blockDim.y + pixel.x]==2){
+      shared_region[pixel.z * blockDim.z*blockDim.z + pixel.y*blockDim.y + pixel.x] = 1;
+      for(int n = 0; n < 6; n++){
+        int3 candidate = pixel;
+        candidate.x += dx[n];
+        candidate.y += dy[n];
+        candidate.z += dz[n];
 
-          if(!inside(candidate)){
-            continue;
-          }
+        if(!inside_block(candidate, blockDim, blockIdx, threadIdx)){
+          continue;
+        }
 
-          if(shared_region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x]){
-            continue;
-          }
+        if(shared_region[candidate.z * blockDim.z*blockDim.z + candidate.y*blockDim.y + candidate.x]){
+          continue;
+        }
 
-          if(similar(shared_data, pixel, candidate)){
-            shared_region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x] = 2;
-            finished[0]=0;
-          }
+        if(similar(data, pixel, candidate)){
+          shared_region[candidate.z * blockDim.z*blockDim.z + candidate.y*blockDim.y + candidate.x] = 2;
+          finished[0]=0;
         }
       }
     }
   }
-  region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
-  if(threadIdx.x==0) {
-    
-  }
+  region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = shared_region[pixel.z * blockDim.z*blockDim.z + pixel.y*blockDim.y + pixel.x];
 }
 
 
