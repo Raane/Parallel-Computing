@@ -746,7 +746,7 @@ int main(int argc, char** argv){
   unsigned char* data = create_data();
   unsigned char* region;
   unsigned char* image;
-  int all = 1;
+  int all = 0;
   if(all) {
     gettimeofday(&start, NULL);
     region = grow_region_gpu_shared(data);
@@ -760,11 +760,11 @@ int main(int argc, char** argv){
     printf("grow_region_gpu:\n");
     print_time(start, end);
 
-    gettimeofday(&start, NULL);
-    region = grow_region_serial(data);
-    gettimeofday(&end, NULL);
-    printf("grow_region_serial:\n");
-    print_time(start, end);
+    //gettimeofday(&start, NULL);
+    //region = grow_region_serial(data);
+    //gettimeofday(&end, NULL);
+    //printf("grow_region_serial:\n");
+    //print_time(start, end);
 
 
     gettimeofday(&start, NULL);
@@ -779,11 +779,11 @@ int main(int argc, char** argv){
     printf("raycast_gpu:\n");
     print_time(start, end);
 
-    gettimeofday(&start, NULL);
-    image = raycast_serial(data, region);
-    gettimeofday(&end, NULL);
-    printf("raycast_serial:\n");
-    print_time(start, end);
+    //gettimeofday(&start, NULL);
+    //image = raycast_serial(data, region);
+    //gettimeofday(&end, NULL);
+    //printf("raycast_serial:\n");
+    //print_time(start, end);
 } else {
     gettimeofday(&start, NULL);
     region = grow_region_gpu(data);
