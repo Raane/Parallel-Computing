@@ -306,7 +306,8 @@ unsigned char* grow_region_serial(unsigned char* data){
   return region;
 }
 
-
+// This kernel will run one time per pixel. Each thread initialize the same variables and run it's own
+// iteration of the for loop from the serial implementation we got from the TA.
 __global__ void raycast_kernel(unsigned char* data, unsigned char* image, unsigned char* region){
 
   // Camera/eye position, and direction of viewing. These can be changed to look
@@ -353,7 +354,7 @@ __global__ void raycast_kernel(unsigned char* data, unsigned char* image, unsign
   image[(y+(IMAGE_DIM/2)) * IMAGE_DIM + (x+(IMAGE_DIM/2))] = color > 255 ? 255 : color;
 }
 
-// Trilinear interpolation
+// Trilinear interpolation from the region texture
 __device__ float value_at_region(float3 pos){
   if(!inside(pos)){
     return 0;
@@ -384,7 +385,7 @@ __device__ float value_at_region(float3 pos){
 
   return c0;
 }
-// Trilinear interpolation
+// Trilinear interpolation from the data texture
 __device__ float value_at_data(float3 pos){
   if(!inside(pos)){
     return 0;
@@ -416,6 +417,11 @@ __device__ float value_at_data(float3 pos){
   return c0;
 }
 
+
+// This kernel will run one time per pixel. Each thread initialize the same variables and run it's own
+// iteration of the for loop from the serial implementation we got from the TA.
+// All data from data and region is read from a 3D texture.
+// TODO: Find the bug that make this output a few random cubes.
 __global__ void raycast_kernel_texture(unsigned char* image){
   // Camera/eye position, and direction of viewing. These can be changed to look
   // at the volume from different angles.
@@ -463,7 +469,9 @@ __global__ void raycast_kernel_texture(unsigned char* image){
 
 }
 
-
+// This function loads data and region into the memory of the gpu. After the data is loaded
+// it run a thread on the gpu for each pixel in the image. After all threads are done
+// the finished image is loaded from the gpu to the main memory.
 unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   unsigned char* image = (unsigned char*)malloc(sizeof(unsigned char)*IMAGE_DIM*IMAGE_DIM);
 
@@ -491,20 +499,16 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
 }
 
 
+// This function loads data and region into the texture memory of the gpu. After the data is loaded
+// it run a thread on the gpu for each pixel in the image. After all threads are done
+// the finished image is loaded from the gpu to the main memory.
+// TODO: Find the bug that make this output a few random cubes.
 unsigned char* raycast_gpu_texture(unsigned char* data, unsigned char* region){
   unsigned char* image = (unsigned char*)malloc(sizeof(unsigned char)*IMAGE_DIM*IMAGE_DIM);
 
-  //unsigned char *data_device;
-  //unsigned char *region_device;
   unsigned char* image_device;
-  //cudaMalloc( (void**)&data_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
-  //cudaMalloc( (void**)&region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
   cudaMalloc( (void**)&image_device,DATA_DIM*DATA_DIM*sizeof(unsigned char));
-  //cudaMemcpy( data_device, data, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
-  //cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
   cudaMemcpy( image_device, image, DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
-
-
 
   data_texture.filterMode=cudaFilterModePoint;
   data_texture.addressMode[0]=cudaAddressModeWrap; 
@@ -515,7 +519,6 @@ unsigned char* raycast_gpu_texture(unsigned char* data, unsigned char* region){
   region_texture.addressMode[1]=cudaAddressModeWrap; 
   region_texture.addressMode[2]=cudaAddressModeClamp; 
 
-  //cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(32,0,0,0,cudaChannelFormatKindFloat);
   cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
 
   cudaExtent extent = make_cudaExtent(512,512,512);
@@ -543,10 +546,6 @@ unsigned char* raycast_gpu_texture(unsigned char* data, unsigned char* region){
   cudaBindTextureToArray(data_texture, data_array, channelDesc);
   cudaBindTextureToArray(region_texture, region_array, channelDesc);
 
-
-
-
-
   dim3 dimBlock( 32, 32 );
   dim3 dimGrid( 16, 16 );
 
@@ -558,7 +557,8 @@ unsigned char* raycast_gpu_texture(unsigned char* data, unsigned char* region){
   return image;
 }
 
-
+// Each thread launched with this kernel will check if it is in a border pixel. If it is
+// it will run 40 iterations of the serial grow algorithm from the TA.
 __global__ void region_grow_kernel(unsigned char* data, unsigned char* region, int* finished){
   int x = blockIdx.x * blockDim.x + threadIdx.x;
   int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -596,6 +596,10 @@ __global__ void region_grow_kernel(unsigned char* data, unsigned char* region, i
 }
 
 
+// Each thread launched with this kernel will check if it is in a region border pixel. If it is
+// it will run 40 iterations of the serial grow algorithm from the TA. Each block of the gpu will
+// use a shared memory during the 40 iterations and syncronize with eachother when they are all done.
+// TODO: This currently doesn't do anything. It should be fixed.
 __global__ void region_grow_kernel_shared(unsigned char* data, unsigned char* region, int* finished){
   int x = blockIdx.x * blockDim.x + threadIdx.x;
   int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -643,12 +647,13 @@ __global__ void region_grow_kernel_shared(unsigned char* data, unsigned char* re
     }
   }
   region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
-  if(threadIdx.x==0) {
-    
-  }
 }
 
-
+// This function creates an empty region and upload it and the data to the gpu.
+// When the data is ready it will launch a thread on the gpu for each point in
+// the region. The threads will run 40 iterations each before terminating.
+// The cpu will then check if there was any extended borders during the execution,
+// and run 40 new iterations until there is no updates.
 unsigned char* grow_region_gpu(unsigned char* data){
   unsigned char* region = (unsigned char*)calloc(sizeof(unsigned char), DATA_DIM*DATA_DIM*DATA_DIM);
   int* finished = (int*)malloc(sizeof(int));
@@ -665,7 +670,6 @@ unsigned char* grow_region_gpu(unsigned char* data){
   cudaMalloc( (void**)&finished_device, sizeof(int));
   cudaMemcpy( data_device, data, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
   cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
-  //cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
 
   dim3 dimBlock( 8, 8, 8 );
   dim3 dimGrid( 64, 64, 64 );
@@ -684,6 +688,14 @@ unsigned char* grow_region_gpu(unsigned char* data){
 }
 
 
+// This function creates an empty region and upload it and the data to the gpu.
+// When the data is ready it will launch a thread on the gpu for each point in
+// the region. The threads will run 40 iterations each before terminating.
+// The cpu will then check if there was any extended borders during the execution,
+// and run 40 new iterations until there is no updates.
+// This is identical to the non shared memory version, but it will run a different
+// kernel.
+// TODO: This currently doesn't do anything. It should be fixed.
 unsigned char* grow_region_gpu_shared(unsigned char* data){
   unsigned char* region = (unsigned char*)calloc(sizeof(unsigned char), DATA_DIM*DATA_DIM*DATA_DIM);
   int* finished = (int*)malloc(sizeof(int));
@@ -700,7 +712,6 @@ unsigned char* grow_region_gpu_shared(unsigned char* data){
   cudaMalloc( (void**)&finished_device, sizeof(int));
   cudaMemcpy( data_device, data, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
   cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
-  //cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
 
   dim3 dimBlock( 8, 8, 8 );
   dim3 dimGrid( 64, 64, 64 );
@@ -735,32 +746,32 @@ int main(int argc, char** argv){
   unsigned char* data = create_data();
   unsigned char* region;
   unsigned char* image;
-
-  if(1) {
+  int all = 1;
+  if(all) {
     gettimeofday(&start, NULL);
     region = grow_region_gpu_shared(data);
     gettimeofday(&end, NULL);
     printf("grow_region_gpu_shared:\n");
     print_time(start, end);
 
-    //gettimeofday(&start, NULL);
-    //region = grow_region_gpu(data);
-    //gettimeofday(&end, NULL);
-    //printf("grow_region_gpu:\n");
-    //print_time(start, end);
+    gettimeofday(&start, NULL);
+    region = grow_region_gpu(data);
+    gettimeofday(&end, NULL);
+    printf("grow_region_gpu:\n");
+    print_time(start, end);
 
-    //gettimeofday(&start, NULL);
-    //region = grow_region_serial(data);
-    //gettimeofday(&end, NULL);
-    //printf("grow_region_serial:\n");
-    //print_time(start, end);
+    gettimeofday(&start, NULL);
+    region = grow_region_serial(data);
+    gettimeofday(&end, NULL);
+    printf("grow_region_serial:\n");
+    print_time(start, end);
 
 
-    //gettimeofday(&start, NULL);
-    //image = raycast_gpu_texture(data, region);
-    //gettimeofday(&end, NULL);
-    //printf("raycast_gpu_texture:\n");
-    //print_time(start, end);
+    gettimeofday(&start, NULL);
+    image = raycast_gpu_texture(data, region);
+    gettimeofday(&end, NULL);
+    printf("raycast_gpu_texture:\n");
+    print_time(start, end);
 
     gettimeofday(&start, NULL);
     image = raycast_gpu(data, region);
@@ -768,11 +779,23 @@ int main(int argc, char** argv){
     printf("raycast_gpu:\n");
     print_time(start, end);
 
-    //gettimeofday(&start, NULL);
-    //image = raycast_serial(data, region);
-    //gettimeofday(&end, NULL);
-    //printf("raycast_serial:\n");
-    //print_time(start, end);
+    gettimeofday(&start, NULL);
+    image = raycast_serial(data, region);
+    gettimeofday(&end, NULL);
+    printf("raycast_serial:\n");
+    print_time(start, end);
+} else {
+    gettimeofday(&start, NULL);
+    region = grow_region_gpu(data);
+    gettimeofday(&end, NULL);
+    printf("grow_region_gpu:\n");
+    print_time(start, end);
+
+    gettimeofday(&start, NULL);
+    image = raycast_gpu(data, region);
+    gettimeofday(&end, NULL);
+    printf("raycast_gpu:\n");
+    print_time(start, end);
   }
   write_bmp(image, IMAGE_DIM, IMAGE_DIM);
 }
