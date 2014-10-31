@@ -607,37 +607,45 @@ __global__ void region_grow_kernel_shared(unsigned char* data, unsigned char* re
 
   int3 pixel = {.x=x, .y=y, .z=z};
 
+
   __shared__ unsigned char shared_data[DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char)];
   __shared__ unsigned char shared_region[DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char)];
   shared_data[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = data[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
   shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
 
 
-  for(int i=0;i<40;i++) {
-    if(shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x]==2){
-      shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = 1;
-      for(int n = 0; n < 6; n++){
-        int3 candidate = pixel;
-        candidate.x += dx[n];
-        candidate.y += dy[n];
-        candidate.z += dz[n];
+  __syncthreads();
+  if(threadIdx.x!=0&&threadIdx.y!=0&&threadIdx.z!=0
+      &&threadIdx.x!=blockDim.x-1&&threadIdx.y!=blockDim.y-1&&threadIdx.z!=blockDim.z-1) {
+    for(int i=0;i<40;i++) {
+      if(shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x]==2){
+        shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = 1;
+        for(int n = 0; n < 6; n++){
+          int3 candidate = pixel;
+          candidate.x += dx[n];
+          candidate.y += dy[n];
+          candidate.z += dz[n];
 
-        if(!inside(candidate)){
-          continue;
-        }
+          if(!inside(candidate)){
+            continue;
+          }
 
-        if(shared_region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x]){
-          continue;
-        }
+          if(shared_region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x]){
+            continue;
+          }
 
-        if(similar(data, pixel, candidate)){
-          shared_region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x] = 2;
-          finished[0]=0;
+          if(similar(shared_data, pixel, candidate)){
+            shared_region[candidate.z * DATA_DIM*DATA_DIM + candidate.y*DATA_DIM + candidate.x] = 2;
+            finished[0]=0;
+          }
         }
       }
     }
   }
   region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x] = shared_region[pixel.z * DATA_DIM*DATA_DIM + pixel.y*DATA_DIM + pixel.x];
+  if(threadIdx.x==0) {
+    
+  }
 }
 
 
@@ -700,13 +708,14 @@ unsigned char* grow_region_gpu_shared(unsigned char* data){
   while(finished[0] == 0){
     finished[0] = 1;
     cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
-    region_grow_kernel<<<dimGrid, dimBlock>>>(data_device, region_device, finished_device);
+    region_grow_kernel_shared<<<dimGrid, dimBlock>>>(data_device, region_device, finished_device);
     cudaMemcpy( finished, finished_device, sizeof(int), cudaMemcpyDeviceToHost);
   }
   cudaMemcpy( region, region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyDeviceToHost);
   cudaFree(data_device);
   cudaFree(region_device);
   cudaFree(finished_device);
+  printf("seed: %i\n", region[50 *DATA_DIM*DATA_DIM + 300*DATA_DIM + 300]);
   return region;
 }
 
@@ -724,24 +733,47 @@ int main(int argc, char** argv){
   struct timeval start, end;
 
   unsigned char* data = create_data();
+  unsigned char* region;
+  unsigned char* image;
 
-  //printf("Data created");
+  if(1) {
+    gettimeofday(&start, NULL);
+    region = grow_region_gpu_shared(data);
+    gettimeofday(&end, NULL);
+    printf("grow_region_gpu_shared:\n");
+    print_time(start, end);
 
-  gettimeofday(&start, NULL);
-  //unsigned char* region = grow_region_gpu(data);
-  unsigned char* region = grow_region_serial(data);
-  gettimeofday(&end, NULL);
-  print_time(start, end);
+    //gettimeofday(&start, NULL);
+    //region = grow_region_gpu(data);
+    //gettimeofday(&end, NULL);
+    //printf("grow_region_gpu:\n");
+    //print_time(start, end);
 
-  //printf("Region grown");
+    //gettimeofday(&start, NULL);
+    //region = grow_region_serial(data);
+    //gettimeofday(&end, NULL);
+    //printf("grow_region_serial:\n");
+    //print_time(start, end);
 
-  gettimeofday(&start, NULL);
-  //unsigned char* image = raycast_gpu_texture(data, region);
-  unsigned char* image = raycast_gpu(data, region);
-  //unsigned char* image = raycast_serial(data, region);
-  gettimeofday(&end, NULL);
-  print_time(start, end);
 
+    //gettimeofday(&start, NULL);
+    //image = raycast_gpu_texture(data, region);
+    //gettimeofday(&end, NULL);
+    //printf("raycast_gpu_texture:\n");
+    //print_time(start, end);
+
+    gettimeofday(&start, NULL);
+    image = raycast_gpu(data, region);
+    gettimeofday(&end, NULL);
+    printf("raycast_gpu:\n");
+    print_time(start, end);
+
+    //gettimeofday(&start, NULL);
+    //image = raycast_serial(data, region);
+    //gettimeofday(&end, NULL);
+    //printf("raycast_serial:\n");
+    //print_time(start, end);
+  }
   write_bmp(image, IMAGE_DIM, IMAGE_DIM);
 }
 
