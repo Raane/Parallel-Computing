@@ -308,35 +308,6 @@ unsigned char* grow_region_gpu(unsigned char* data){
   int3 seed = {.x=50, .y=300, .z=300};
   region[seed.z *DATA_DIM*DATA_DIM + seed.y*DATA_DIM + seed.x] = 2;
 
-  unsigned char *data_device;
-  unsigned char *region_device;
-  int *finished_device;
-  cudaMalloc( (void**)&data_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
-  cudaMalloc( (void**)&region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
-  cudaMalloc( (void**)&finished_device, sizeof(int));
-  cudaMemcpy( data_device, data, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
-  cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
-
-  dim3 dimBlock( 8, 8, 8 );
-  dim3 dimGrid( 64, 64, 64 );
-
-  while(finished[0] == 0){
-    finished[0] = 1;
-    cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
-    region_grow_kernel<<<dimGrid, dimBlock>>>(data_device, region_device, finished_device);
-    cudaMemcpy( finished, finished_device, sizeof(int), cudaMemcpyDeviceToHost);
-  }
-  cudaMemcpy( region, region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyDeviceToHost);
-  cudaFree(data_device);
-  cudaFree(region_device);
-  cudaFree(finished_device);
-  return region;
-
-
-
-
-
-
   cl_platform_id platform;
   cl_device_id device;
   cl_context context;
@@ -362,6 +333,7 @@ unsigned char* grow_region_gpu(unsigned char* data){
   clError("Error allocating memory", err);
 
   clEnqueueWriteBuffer(queue, data_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), data, 0, NULL, NULL);
+  clEnqueueWriteBuffer(queue, region_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), region, 0, NULL, NULL);
 
   err = clSetKernelArg(kernel, 0, sizeof(data_device), (void*)&data_device);
   err = clSetKernelArg(kernel, 1, sizeof(finished_device), (void*)&finished_device);
@@ -392,7 +364,6 @@ unsigned char* grow_region_gpu(unsigned char* data){
   // End of snippet
 
   clFinish(queue);
-  float* region = (float*)malloc(sizeof(unsigned char)*DATA_DIM*DATA_DIM*DATA_DIM);
   err = clEnqueueReadBuffer(queue, region_device, CL_TRUE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), region, 0, NULL, NULL);
   clFinish(queue);
 
