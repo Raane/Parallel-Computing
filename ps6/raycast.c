@@ -324,10 +324,6 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
   cudaMemcpy( image_device, image, DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
 
-
-
-
-
   clGetPlatformIDs(1, &platform, NULL);
   clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
   context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
@@ -336,39 +332,38 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   printDeviceInfo(device);
 
   queue = clCreateCommandQueue(context, device, 0, &err);
-  kernel = buildKernel("multiply_opencl.cl", "multiply", NULL, context, device);
+  kernel = buildKernel("raycast.cl", "raycast", NULL, context, device);
 
-  /*float* a_host = (float*)malloc(sizeof(float)*1024);
-  float* b_host = (float*)malloc(sizeof(float)*1024);
-
-  for(int i = 0; i < 1024; i++){
-    a_host[i] = i+1;
-    b_host[i] = 1.0/(float)(i+1);
-  }
-
-  float* result_host = (float*)malloc(sizeof(float)*1024);
-
-  host_multiply(a_host, b_host, result_host);
-*/
-  cl_mem data_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_float),NULL,&err);
-  cl_mem region_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_float),NULL,&err);
-  cl_mem image_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*sizeof(cl_float),NULL,&err);
+  cl_mem data_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar),NULL,&err);
+  cl_mem region_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar),NULL,&err);
+  cl_mem image_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*sizeof(cl_uchar),NULL,&err);
   clError("Error allocating memory", err);
 
-  clEnqueueWriteBuffer(queue, data_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_float), data, 0, NULL, NULL);
-  clEnqueueWriteBuffer(queue, region_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_float), region, 0, NULL, NULL);
+  clEnqueueWriteBuffer(queue, data_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), data, 0, NULL, NULL);
+  clEnqueueWriteBuffer(queue, region_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), region, 0, NULL, NULL);
 
   err = clSetKernelArg(kernel, 0, sizeof(a_device), (void*)&a_device);
   err = clSetKernelArg(kernel, 1, sizeof(b_device), (void*)&b_device);
   err = clSetKernelArg(kernel, 2, sizeof(image_device), (void*)&result_device);
   clError("Error setting arguments", err);
 
-  size_t globalws=SIZE;
-  clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &globalws, NULL, 0, NULL, NULL);
+  //Snippet from DarkZeros: http://stackoverflow.com/questions/20550640/2d-grids-blocks-on-opencl
+  //Create the size holders
+  size_t * global = (size_t*) malloc(sizeof(size_t)*2);
+  size_t * local = (size_t*) malloc(sizeof(size_t)*2);
+  
+  //Set the size
+  global[0] = DATA_DIM; global[1] = DATA_DIM;
+  local [0] = 16; local [1] = 16;
+  clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL); // I did some changes to the snippet here.
+
+  //Clean the size holders
+  free(global);
+  free(local);
+  // End of snippet
 
   clFinish(queue);
-  float* result_from_device = (float*)malloc(sizeof(float)*1024);
-  err = clEnqueueReadBuffer(queue, result_device, CL_TRUE, 0, SIZE*sizeof(cl_float), result_from_device, 0, NULL, NULL);
+  err = clEnqueueReadBuffer(queue, result_device, CL_TRUE, 0, DATA_DIM*DATA_DIM*sizeof(cl_uchar), image, 0, NULL, NULL);
   clFinish(queue);
 
   printf("Host\tDevice\n");
@@ -377,32 +372,11 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   }
 
 
-  clReleaseMemObject(a_device);
-  clReleaseMemObject(b_device);
+  clReleaseMemObject(data_device);
+  clReleaseMemObject(region_device);
   clReleaseKernel(kernel);
   clReleaseCommandQueue(queue);
   clReleaseContext(context);
-
-  return 0;
-
-
-
-
-
-
-
-
-
-
-  dim3 dimBlock( 4, 4 );
-  dim3 dimGrid( 128, 128 );
-
-  raycast_kernel<<<dimGrid, dimBlock>>>(data_device, image_device, region_device);
-
-  cudaMemcpy( image, image_device, DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyDeviceToHost);
-  cudaFree(data_device);
-  cudaFree(region_device);
-  cudaFree(image_device);
 
   return image;
 }
