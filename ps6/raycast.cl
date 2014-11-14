@@ -88,9 +88,6 @@ float ps5_value_at(float3 pos, unsigned char* data){
 __kernel void raycast(__global unsigned char* data, __global unsigned char* region, __global unsigned char* image) {
   int id = get_global_id(0);
 
-
-
-
   // Camera/eye position, and direction of viewing. These can be changed to look
   // at the volume from different angles.
   float3 camera;
@@ -141,5 +138,6 @@ __kernel void raycast(__global unsigned char* data, __global unsigned char* regi
     color += ps5_value_at(pos, *data)*(0.01 + r) ;       // Update the color based on data value, and if we're in the region
   }
   // Write final color to image
-  image[(y+(IMAGE_DIM/2)) * IMAGE_DIM + (x+(IMAGE_DIM/2))] = 255;//color > 255 ? 255 : color;
+  image[(y+(IMAGE_DIM/2)) * IMAGE_DIM + (x+(IMAGE_DIM/2))] = color > 255 ? 255 : color;
+  //image[id] = 255;
 }

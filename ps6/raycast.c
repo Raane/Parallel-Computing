@@ -340,28 +340,23 @@ unsigned char* grow_region_gpu(unsigned char* data){
   err = clSetKernelArg(kernel, 2, sizeof(region_device), (void*)&region_device);
   clError("Error setting arguments", err);
 
-  //Snippet from DarkZeros: http://stackoverflow.com/questions/20550640/2d-grids-blocks-on-opencl
-  //Create the size holders
   size_t * global = (size_t*) malloc(sizeof(size_t)*3);
   size_t * local = (size_t*) malloc(sizeof(size_t)*3);
   
-  //Set the size
   global[0] = DATA_DIM; global[1] = DATA_DIM; global[2] = DATA_DIM;
   local [0] = 4; local [1] = 4; local [2]=4;
 
   while(finished[0] == 0){
     finished[0] = 1;
     clEnqueueWriteBuffer(queue, finished_device, CL_FALSE, 0, sizeof(cl_int), finished, 0, NULL, NULL);
-    clEnqueueNDRangeKernel(queue, kernel, 3, NULL, global, local, 0, NULL, NULL); // I did some changes to the snippet here.
+    clEnqueueNDRangeKernel(queue, kernel, 3, NULL, global, local, 0, NULL, NULL);
     clFinish(queue);
     err = clEnqueueReadBuffer(queue, finished_device, CL_TRUE, 0, sizeof(cl_uchar), finished, 0, NULL, NULL);
     clFinish(queue);
   }
 
-  //Clean the size holders
   free(global);
   free(local);
-  // End of snippet
 
   clFinish(queue);
   err = clEnqueueReadBuffer(queue, region_device, CL_TRUE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), region, 0, NULL, NULL);
@@ -399,7 +394,7 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
 
   cl_mem data_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar),NULL,&err);
   cl_mem region_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar),NULL,&err);
-  cl_mem image_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*sizeof(cl_uchar),NULL,&err);
+  cl_mem image_device = clCreateBuffer(context, CL_MEM_READ_ONLY, IMAGE_DIM*IMAGE_DIM*sizeof(cl_uchar),NULL,&err);
   clError("Error allocating memory", err);
 
   clEnqueueWriteBuffer(queue, data_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), data, 0, NULL, NULL);
@@ -410,23 +405,18 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   err = clSetKernelArg(kernel, 2, sizeof(image_device), (void*)&image_device);
   clError("Error setting arguments", err);
 
-  //Snippet from DarkZeros: http://stackoverflow.com/questions/20550640/2d-grids-blocks-on-opencl
-  //Create the size holders
   size_t * global = (size_t*) malloc(sizeof(size_t)*2);
   size_t * local = (size_t*) malloc(sizeof(size_t)*2);
-  
-  //Set the size
-  global[0] = DATA_DIM; global[1] = DATA_DIM;
-  local [0] = 16; local [1] = 16;
-  clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL); // I did some changes to the snippet here.
 
-  //Clean the size holders
+  global[0] = IMAGE_DIM; global[1] = IMAGE_DIM;
+  local [0] = 4; local [1] = 4;
+  clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global, local, 0, NULL, NULL);
+
   free(global);
   free(local);
-  // End of snippet
 
   clFinish(queue);
-  err = clEnqueueReadBuffer(queue, image_device, CL_TRUE, 0, DATA_DIM*DATA_DIM*sizeof(cl_uchar), image, 0, NULL, NULL);
+  err = clEnqueueReadBuffer(queue, image_device, CL_TRUE, 0, IMAGE_DIM*IMAGE_DIM*sizeof(cl_uchar), image, 0, NULL, NULL);
   clFinish(queue);
 
   clReleaseMemObject(data_device);
@@ -442,9 +432,7 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
 int main(int argc, char** argv){
 
   unsigned char* data = create_data();
-
   unsigned char* region = grow_region_gpu(data);
-
   unsigned char* image = raycast_gpu(data, region);
 
   write_bmp(image, IMAGE_DIM, IMAGE_DIM);
