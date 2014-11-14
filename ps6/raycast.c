@@ -299,7 +299,110 @@ unsigned char* grow_region_serial(unsigned char* data){
   return region;
 }
 
-void grow_region_gpu(unsigned char* data){
+unsigned char* grow_region_gpu(unsigned char* data){
+
+  unsigned char* region = (unsigned char*)calloc(sizeof(unsigned char), DATA_DIM*DATA_DIM*DATA_DIM);
+  int* finished = (int*)malloc(sizeof(int));
+    finished[0] = 0;
+
+  int3 seed = {.x=50, .y=300, .z=300};
+  region[seed.z *DATA_DIM*DATA_DIM + seed.y*DATA_DIM + seed.x] = 2;
+
+  unsigned char *data_device;
+  unsigned char *region_device;
+  int *finished_device;
+  cudaMalloc( (void**)&data_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
+  cudaMalloc( (void**)&region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
+  cudaMalloc( (void**)&finished_device, sizeof(int));
+  cudaMemcpy( data_device, data, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
+  cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
+
+  dim3 dimBlock( 8, 8, 8 );
+  dim3 dimGrid( 64, 64, 64 );
+
+  while(finished[0] == 0){
+    finished[0] = 1;
+    cudaMemcpy( finished_device, finished, sizeof(int), cudaMemcpyHostToDevice);
+    region_grow_kernel<<<dimGrid, dimBlock>>>(data_device, region_device, finished_device);
+    cudaMemcpy( finished, finished_device, sizeof(int), cudaMemcpyDeviceToHost);
+  }
+  cudaMemcpy( region, region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyDeviceToHost);
+  cudaFree(data_device);
+  cudaFree(region_device);
+  cudaFree(finished_device);
+  return region;
+
+
+
+
+
+
+  cl_platform_id platform;
+  cl_device_id device;
+  cl_context context;
+  cl_command_queue queue;
+  cl_kernel kernel;
+  cl_int err;
+  char *source;
+  int i;
+
+  clGetPlatformIDs(1, &platform, NULL);
+  clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
+  context = clCreateContext(NULL, 1, &device, NULL, NULL, &err);
+
+  printPlatformInfo(platform);
+  printDeviceInfo(device);
+
+  queue = clCreateCommandQueue(context, device, 0, &err);
+  kernel = buildKernel("region.cl", "region", NULL, context, device);
+
+  cl_mem data_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar),NULL,&err);
+  cl_mem finished_device = clCreateBuffer(context, CL_MEM_READ_ONLY, sizeof(cl_int),NULL,&err);
+  cl_mem region_device = clCreateBuffer(context, CL_MEM_READ_ONLY, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar),NULL,&err);
+  clError("Error allocating memory", err);
+
+  clEnqueueWriteBuffer(queue, data_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), data, 0, NULL, NULL);
+
+  err = clSetKernelArg(kernel, 0, sizeof(data_device), (void*)&data_device);
+  err = clSetKernelArg(kernel, 1, sizeof(finished_device), (void*)&finished_device);
+  err = clSetKernelArg(kernel, 2, sizeof(region_device), (void*)&region_device);
+  clError("Error setting arguments", err);
+
+  //Snippet from DarkZeros: http://stackoverflow.com/questions/20550640/2d-grids-blocks-on-opencl
+  //Create the size holders
+  size_t * global = (size_t*) malloc(sizeof(size_t)*3);
+  size_t * local = (size_t*) malloc(sizeof(size_t)*3);
+  
+  //Set the size
+  global[0] = DATA_DIM; global[1] = DATA_DIM; global[2] = DATA_DIM;
+  local [0] = 4; local [1] = 4; local [2]=4;
+
+  while(finished[0] == 0){
+    finished[0] = 1;
+    clEnqueueWriteBuffer(queue, finished_device, CL_FALSE, 0, sizeof(cl_int), finished, 0, NULL, NULL);
+    clEnqueueNDRangeKernel(queue, kernel, 3, NULL, global, local, 0, NULL, NULL); // I did some changes to the snippet here.
+    clFinish(queue);
+    err = clEnqueueReadBuffer(queue, finished_device, CL_TRUE, 0, sizeof(cl_uchar), finished, 0, NULL, NULL);
+    clFinish(queue);
+  }
+
+  //Clean the size holders
+  free(global);
+  free(local);
+  // End of snippet
+
+  clFinish(queue);
+  float* region = (float*)malloc(sizeof(unsigned char)*DATA_DIM*DATA_DIM*DATA_DIM);
+  err = clEnqueueReadBuffer(queue, region_device, CL_TRUE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), region, 0, NULL, NULL);
+  clFinish(queue);
+
+  clReleaseMemObject(data_device);
+  clReleaseMemObject(finished_device);
+  clReleaseKernel(kernel);
+  clReleaseCommandQueue(queue);
+  clReleaseContext(context);
+
+  return region;
 }
 
 unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
@@ -311,18 +414,7 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   cl_int err;
   char *source;
   int i;
-
   unsigned char* image = (unsigned char*)malloc(sizeof(unsigned char)*IMAGE_DIM*IMAGE_DIM);
-
-  unsigned char *data_device;
-  unsigned char *region_device;
-  unsigned char* image_device;
-  cudaMalloc( (void**)&data_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
-  cudaMalloc( (void**)&region_device, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char));
-  cudaMalloc( (void**)&image_device,DATA_DIM*DATA_DIM*sizeof(unsigned char));
-  cudaMemcpy( data_device, data, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
-  cudaMemcpy( region_device, region, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
-  cudaMemcpy( image_device, image, DATA_DIM*DATA_DIM*sizeof(unsigned char), cudaMemcpyHostToDevice);
 
   clGetPlatformIDs(1, &platform, NULL);
   clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, NULL);
@@ -342,9 +434,9 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   clEnqueueWriteBuffer(queue, data_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), data, 0, NULL, NULL);
   clEnqueueWriteBuffer(queue, region_device, CL_FALSE, 0, DATA_DIM*DATA_DIM*DATA_DIM*sizeof(cl_uchar), region, 0, NULL, NULL);
 
-  err = clSetKernelArg(kernel, 0, sizeof(a_device), (void*)&a_device);
-  err = clSetKernelArg(kernel, 1, sizeof(b_device), (void*)&b_device);
-  err = clSetKernelArg(kernel, 2, sizeof(image_device), (void*)&result_device);
+  err = clSetKernelArg(kernel, 0, sizeof(data_device), (void*)&data_device);
+  err = clSetKernelArg(kernel, 1, sizeof(region_device), (void*)&region_device);
+  err = clSetKernelArg(kernel, 2, sizeof(image_device), (void*)&image_device);
   clError("Error setting arguments", err);
 
   //Snippet from DarkZeros: http://stackoverflow.com/questions/20550640/2d-grids-blocks-on-opencl
@@ -363,14 +455,8 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   // End of snippet
 
   clFinish(queue);
-  err = clEnqueueReadBuffer(queue, result_device, CL_TRUE, 0, DATA_DIM*DATA_DIM*sizeof(cl_uchar), image, 0, NULL, NULL);
+  err = clEnqueueReadBuffer(queue, image_device, CL_TRUE, 0, DATA_DIM*DATA_DIM*sizeof(cl_uchar), image, 0, NULL, NULL);
   clFinish(queue);
-
-  printf("Host\tDevice\n");
-  for(int i = 0; i < 10; i++){
-    printf("%0.2f\t%0.2f\n" , result_host[i], result_from_device[i]);
-  }
-
 
   clReleaseMemObject(data_device);
   clReleaseMemObject(region_device);
@@ -388,7 +474,7 @@ int main(int argc, char** argv){
 
   unsigned char* region = grow_region_serial(data);
 
-  unsigned char* image = raycast_serial(data, region);
+  unsigned char* image = raycast_gpu(data, region);
 
   write_bmp(image, IMAGE_DIM, IMAGE_DIM);
 }
