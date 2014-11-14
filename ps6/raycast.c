@@ -443,7 +443,7 @@ int main(int argc, char** argv){
 
   unsigned char* data = create_data();
 
-  unsigned char* region = grow_region_serial(data);
+  unsigned char* region = grow_region_gpu(data);
 
   unsigned char* image = raycast_gpu(data, region);
 
