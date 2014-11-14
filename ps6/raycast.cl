@@ -2,7 +2,7 @@
 #define DATA_DIM 512
 // image is 2D, total size is IMAGE_DIM x IMAGE_DIM
 #define IMAGE_DIM 64
-// float3 utilities
+
 float3 ps5_cross(float3 a, float3 b){
   float3 c;
   c.x = a.y*b.z - a.z*b.y;
@@ -83,8 +83,6 @@ float ps5_value_at(float3 pos, unsigned char* data){
   return c0;
 }
 
-
-
 __kernel void raycast(__global unsigned char* data, __global unsigned char* region, __global unsigned char* image) {
   int id = get_global_id(0);
 
@@ -139,5 +137,4 @@ __kernel void raycast(__global unsigned char* data, __global unsigned char* regi
   }
   // Write final color to image
   image[(y+(IMAGE_DIM/2)) * IMAGE_DIM + (x+(IMAGE_DIM/2))] = color > 255 ? 255 : color;
-  //image[id] = 255;
 }

@@ -340,12 +340,14 @@ unsigned char* grow_region_gpu(unsigned char* data){
   err = clSetKernelArg(kernel, 2, sizeof(region_device), (void*)&region_device);
   clError("Error setting arguments", err);
 
+  // Set the size of the workgroup and problem
   size_t * global = (size_t*) malloc(sizeof(size_t)*3);
   size_t * local = (size_t*) malloc(sizeof(size_t)*3);
   
   global[0] = DATA_DIM; global[1] = DATA_DIM; global[2] = DATA_DIM;
   local [0] = 4; local [1] = 4; local [2]=4;
 
+  // Run until nothing is updated
   while(finished[0] == 0){
     finished[0] = 1;
     clEnqueueWriteBuffer(queue, finished_device, CL_FALSE, 0, sizeof(cl_int), finished, 0, NULL, NULL);
@@ -405,6 +407,7 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
   err = clSetKernelArg(kernel, 2, sizeof(image_device), (void*)&image_device);
   clError("Error setting arguments", err);
 
+  // Set the size of the workgroup and problem
   size_t * global = (size_t*) malloc(sizeof(size_t)*2);
   size_t * local = (size_t*) malloc(sizeof(size_t)*2);
 
@@ -414,8 +417,9 @@ unsigned char* raycast_gpu(unsigned char* data, unsigned char* region){
 
   free(global);
   free(local);
-
   clFinish(queue);
+
+  // Load the image from the GPU
   err = clEnqueueReadBuffer(queue, image_device, CL_TRUE, 0, IMAGE_DIM*IMAGE_DIM*sizeof(cl_uchar), image, 0, NULL, NULL);
   clFinish(queue);
 
